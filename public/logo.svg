@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800">
+  <!-- Main color = your globals.css primary token: oklch(0.553 0.195 38.402), hex #c43e00 -->
+  <g fill="#c43e00">
+    <!-- Full circle ring -->
+    <circle cx="600" cy="355" r="140" fill="none" stroke="#c43e00" stroke-width="14" />
+
+    <!-- Open book -->
+    <path fill="none" stroke="#c43e00" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"
+          d="M 438 402
+             Q 520 378 600 412
+             Q 680 378 762 402" />
+    <path fill="none" stroke="#c43e00" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"
+          d="M 438 402
+             Q 520 400 600 424
+             Q 680 400 762 402" />
+
+    <!-- Pencil shaft -->
+    <rect x="579" y="222" width="42" height="103" />
+    <line x1="600" y1="222" x2="600" y2="325" stroke="#ffffff" stroke-width="5"/>
+
+    <!-- Pencil tip -->
+    <path d="M 579 325 L 621 325 L 600 358 Z" />
+    <path d="M 594 358 L 606 358 L 600 370 Z" />
+
+    <!-- Graduation cap -->
+    <polygon points="600,172 658,203 600,234 542,203" />
+    <rect x="586" y="203" width="28" height="24" />
+  </g>
+</svg>
