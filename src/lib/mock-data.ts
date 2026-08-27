@@ -235,6 +235,80 @@ export interface GradeRecord {
   score: number;
 }
 
+export type PaymentStatus = "pending" | "approved" | "rejected";
+
+export interface PaymentRow {
+  id: string;
+  studentId: string;
+  studentName: string;
+  studentNumber: string;
+  amount: number;
+  paymentMonth: string;
+  status: PaymentStatus;
+  paymentMethod: "bank" | "cash" | "telebirr" | "other";
+  submittedAt: string;
+  note?: string;
+}
+
+export const payments: PaymentRow[] = [
+  {
+    id: "pay1",
+    studentId: "s1",
+    studentName: "Betelhem Ashenafi",
+    studentNumber: "STU-2026-0231",
+    amount: 2500,
+    paymentMonth: "2026-08",
+    status: "approved",
+    paymentMethod: "telebirr",
+    submittedAt: "2026-08-05",
+  },
+  {
+    id: "pay2",
+    studentId: "s2",
+    studentName: "Nathnael Girma",
+    studentNumber: "STU-2026-0230",
+    amount: 2500,
+    paymentMonth: "2026-08",
+    status: "pending",
+    paymentMethod: "bank",
+    submittedAt: "2026-08-08",
+  },
+  {
+    id: "pay3",
+    studentId: "s3",
+    studentName: "Ruth Solomon",
+    studentNumber: "STU-2026-0229",
+    amount: 2500,
+    paymentMonth: "2026-08",
+    status: "approved",
+    paymentMethod: "cash",
+    submittedAt: "2026-08-03",
+  },
+  {
+    id: "pay4",
+    studentId: "s4",
+    studentName: "Abel Kebede",
+    studentNumber: "STU-2026-0228",
+    amount: 2500,
+    paymentMonth: "2026-08",
+    status: "rejected",
+    paymentMethod: "other",
+    submittedAt: "2026-08-02",
+    note: "Payment proof was not readable.",
+  },
+  {
+    id: "pay5",
+    studentId: "s5",
+    studentName: "Liya Tadesse",
+    studentNumber: "STU-2026-0227",
+    amount: 2500,
+    paymentMonth: "2026-08",
+    status: "pending",
+    paymentMethod: "telebirr",
+    submittedAt: "2026-08-09",
+  },
+];
+
 export const allTeachers: TeacherRow[] = [
   {
     id: "t1",

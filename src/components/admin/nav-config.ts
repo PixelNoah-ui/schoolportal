@@ -9,6 +9,7 @@ import {
   CalendarRange,
   Settings,
   Trophy,
+  CreditCard,
   type LucideIcon,
 } from "lucide-react";
 
@@ -27,6 +28,7 @@ export const adminNavMain: NavItem[] = [
   { title: "Subjects", url: "/admin/subjects", icon: BookOpen },
   { title: "Grades", url: "/admin/grades", icon: ClipboardList },
   { title: "Rankings", url: "/admin/rankings", icon: Trophy },
+  { title: "Payments", url: "/admin/payments", icon: CreditCard },
   {
     title: "Academic Years",
     url: "/admin/academic-years",

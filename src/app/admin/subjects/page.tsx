@@ -6,6 +6,7 @@ import { SiteHeader } from "@/components/admin/site-header";
 import { PageHeader } from "@/components/admin/page-header";
 import { DataToolbar } from "@/components/admin/data-toolbar";
 import { RowActions } from "@/components/admin/row-actions";
+import type { FieldConfig } from "@/components/admin/entity-form-dialog";
 import { GradeBadge } from "@/components/admin/grade-badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -17,6 +18,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { allSubjects, classes } from "@/lib/mock-data";
+
+const subjectFields: FieldConfig[] = [
+  { name: "name", label: "Subject" },
+  { name: "className", label: "Class" },
+  { name: "avgScore", label: "Average score", type: "number" },
+];
 
 export default function SubjectsPage() {
   const [search, setSearch] = useState("");
@@ -82,7 +89,17 @@ export default function SubjectsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <RowActions />
+                      <RowActions
+                        entityName={s.name}
+                        fields={subjectFields}
+                        values={{
+                          name: s.name,
+                          className: s.className,
+                          avgScore: String(s.avgScore),
+                        }}
+                        onEdit={() => {}}
+                        onDelete={() => {}}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}

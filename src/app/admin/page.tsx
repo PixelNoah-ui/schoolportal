@@ -1,5 +1,12 @@
 // app/admin/page.tsx
-import { GraduationCap, Users, Layers, TrendingUp } from "lucide-react";
+import {
+  ClipboardList,
+  GraduationCap,
+  Layers,
+  TrendingUp,
+  Users,
+  WalletCards,
+} from "lucide-react";
 import { SiteHeader } from "@/components/admin/site-header";
 import { StatCard } from "@/components/admin/stat-card";
 import { EnrollmentChart } from "@/components/admin/enrollment-chart";
@@ -11,6 +18,7 @@ import {
   topSubjects,
   currentAcademicYear,
   currentSemester,
+  payments,
 } from "@/lib/mock-data";
 
 export default function AdminDashboardPage() {
@@ -48,6 +56,30 @@ export default function AdminDashboardPage() {
             value={`${stats.avgScore}%`}
             delta={stats.avgScoreDelta}
             icon={TrendingUp}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <StatCard
+            label="Payments Received"
+            value={`${payments.filter((payment) => payment.status === "approved").length}`}
+            delta="approved payments"
+            icon={TrendingUp}
+          />
+          <StatCard
+            label="Pending Payments"
+            value={`${payments.filter((payment) => payment.status === "pending").length}`}
+            delta="need review"
+            icon={ClipboardList}
+          />
+          <StatCard
+            label="Collected This Month"
+            value={`${payments
+              .filter((payment) => payment.status === "approved")
+              .reduce((total, payment) => total + payment.amount, 0)
+              .toLocaleString()} ETB`}
+            delta="approved total"
+            icon={WalletCards}
           />
         </div>
 

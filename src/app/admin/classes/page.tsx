@@ -6,9 +6,17 @@ import { SiteHeader } from "@/components/admin/site-header";
 import { PageHeader } from "@/components/admin/page-header";
 import { DataToolbar } from "@/components/admin/data-toolbar";
 import { RowActions } from "@/components/admin/row-actions";
+import type { FieldConfig } from "@/components/admin/entity-form-dialog";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Users } from "lucide-react";
 import { classes } from "@/lib/mock-data";
+
+const classFields: FieldConfig[] = [
+  { name: "grade", label: "Grade", type: "number" },
+  { name: "section", label: "Section" },
+  { name: "teacher", label: "Homeroom teacher" },
+  { name: "studentCount", label: "Students", type: "number" },
+];
 
 export default function ClassesPage() {
   const [search, setSearch] = useState("");
@@ -52,7 +60,18 @@ export default function ClassesPage() {
                     Section {c.section}
                   </p>
                 </div>
-                <RowActions />
+                <RowActions
+                  entityName={`Grade ${c.grade} - Section ${c.section}`}
+                  fields={classFields}
+                  values={{
+                    grade: String(c.grade),
+                    section: c.section,
+                    teacher: c.teacher,
+                    studentCount: String(c.studentCount),
+                  }}
+                  onEdit={() => {}}
+                  onDelete={() => {}}
+                />
               </CardHeader>
               <CardContent className="pt-4">
                 <p className="text-sm text-muted-foreground">
