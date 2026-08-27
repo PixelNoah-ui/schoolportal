@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/client";
+import { toUserRole } from "../roles";
 
 export type LoginInput = {
   email: string;
@@ -22,7 +23,25 @@ export async function signIn(input: LoginInput) {
     throw new Error(error.message);
   }
 
-  return data;
+  const metadataRole = toUserRole(data.user.user_metadata?.role);
+  if (metadataRole) {
+    return { ...data, role: metadataRole };
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", data.user.id)
+    .maybeSingle();
+  const profileRole = toUserRole(profile?.role);
+
+  if (profileError || !profileRole) {
+    throw new Error(
+      "Your account has no valid role. Add admin, teacher, or student to your profiles.role or user metadata.",
+    );
+  }
+
+  return { ...data, role: profileRole };
 }
 
 export async function sendPasswordResetEmail(input: ResetEmailInput) {

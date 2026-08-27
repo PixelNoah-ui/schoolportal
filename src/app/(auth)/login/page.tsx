@@ -16,8 +16,8 @@ type LoginForm = { email: string; password: string };
 export default function LoginPage() {
   const router = useRouter();
   const login = useLogin({
-    onSuccess: () => {
-      router.push("/");
+    onSuccess: ({ role }) => {
+      router.replace(`/${role}`);
       router.refresh();
     },
   });
