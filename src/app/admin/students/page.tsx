@@ -1,7 +1,7 @@
 // app/admin/students/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { GraduationCap, Plus } from "lucide-react";
 import { SiteHeader } from "@/components/admin/site-header";
@@ -27,6 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { classes } from "@/lib/mock-data";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import {
   useStudents,
   useCreateStudent,
@@ -53,12 +54,14 @@ export default function StudentsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const search = searchParams.get("search") ?? "";
+  const [searchInput, setSearchInput] = useState(search);
+  const debouncedSearch = useDebouncedValue(searchInput);
   const classFilter = searchParams.get("class") ?? "all";
   const currentPage = Math.max(1, Number(searchParams.get("page") ?? "1"));
   const [addOpen, setAddOpen] = useState(false);
 
   const { data, isLoading } = useStudents({
-    search,
+    search: debouncedSearch,
     classId: classFilter,
     page: currentPage,
   });
@@ -69,15 +72,24 @@ export default function StudentsPage() {
   const hasFilters = Boolean(search) || classFilter !== "all";
   const isEmpty = !isLoading && (data?.students.length ?? 0) === 0;
 
-  function updateQuery(key: string, value: string) {
-    const next = new URLSearchParams(searchParams);
-    if (!value || value === "all") next.delete(key);
-    else next.set(key, value);
-    next.delete("page");
-    router.push(`?${next.toString()}`);
-  }
+  const updateQuery = useCallback(
+    (key: string, value: string) => {
+      const next = new URLSearchParams(searchParams);
+      if (!value || value === "all") next.delete(key);
+      else next.set(key, value);
+      next.delete("page");
+      router.replace(`?${next.toString()}`);
+    },
+    [router, searchParams],
+  );
+
+  useEffect(() => {
+    if (debouncedSearch === search) return;
+    updateQuery("search", debouncedSearch);
+  }, [debouncedSearch, search, updateQuery]);
 
   function clearFilters() {
+    setSearchInput("");
     router.push("?");
   }
 
@@ -104,8 +116,8 @@ export default function StudentsPage() {
         </div>
 
         <DataToolbar
-          searchValue={search}
-          onSearchChange={(value) => updateQuery("search", value)}
+          searchValue={searchInput}
+          onSearchChange={setSearchInput}
           searchPlaceholder="Search by name or username"
           filterOptions={classes.map((c) => ({
             label: `Grade ${c.grade} - ${c.section}`,

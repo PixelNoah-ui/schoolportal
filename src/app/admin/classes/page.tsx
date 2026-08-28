@@ -1,93 +1,180 @@
-// app/admin/classes/page.tsx
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Plus, School } from "lucide-react";
 import { SiteHeader } from "@/components/admin/site-header";
 import { PageHeader } from "@/components/admin/page-header";
 import { DataToolbar } from "@/components/admin/data-toolbar";
 import { RowActions } from "@/components/admin/row-actions";
-import type { FieldConfig } from "@/components/admin/entity-form-dialog";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Users } from "lucide-react";
-import { classes } from "@/lib/mock-data";
+import {
+  EntityFormDialog,
+  type FieldConfig,
+} from "@/components/admin/entity-form-dialog";
+import { TableSkeleton } from "@/components/admin/table-skeleton";
+import { EntityEmptyState } from "@/components/admin/entity-empty-state";
+import { Button } from "@/components/ui/button";
+import PaginationBar from "@/components/PaginationBar";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  useClasses,
+  useCreateClass,
+  useUpdateClass,
+  useDeleteClass,
+} from "@/hooks/use-classes";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 
 const classFields: FieldConfig[] = [
+  { name: "name", label: "Class name" },
   { name: "grade", label: "Grade", type: "number" },
   { name: "section", label: "Section" },
-  { name: "teacher", label: "Homeroom teacher" },
-  { name: "studentCount", label: "Students", type: "number" },
 ];
 
 export default function ClassesPage() {
-  const [search, setSearch] = useState("");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const search = searchParams.get("search") ?? "";
+  const [searchInput, setSearchInput] = useState(search);
+  const debouncedSearch = useDebouncedValue(searchInput);
+  const currentPage = Math.max(1, Number(searchParams.get("page") ?? "1"));
+  const [addOpen, setAddOpen] = useState(false);
 
-  const filtered = useMemo(
-    () =>
-      classes.filter(
-        (c) =>
-          `grade ${c.grade} ${c.section}`
-            .toLowerCase()
-            .includes(search.toLowerCase()) ||
-          c.teacher.toLowerCase().includes(search.toLowerCase()),
-      ),
-    [search],
+  const { data, isLoading } = useClasses({
+    search: debouncedSearch,
+    page: currentPage,
+  });
+  const createClass = useCreateClass();
+  const updateClass = useUpdateClass();
+  const deleteClass = useDeleteClass();
+
+  const hasFilters = Boolean(search);
+  const isEmpty = !isLoading && (data?.classes.length ?? 0) === 0;
+
+  const updateQuery = useCallback(
+    (value: string) => {
+      const next = new URLSearchParams(searchParams);
+      if (value) next.set("search", value);
+      else next.delete("search");
+      next.delete("page");
+      router.replace(`?${next.toString()}`);
+    },
+    [router, searchParams],
   );
+
+  useEffect(() => {
+    if (debouncedSearch === search) return;
+    updateQuery(debouncedSearch);
+  }, [debouncedSearch, search, updateQuery]);
+
+  function clearFilters() {
+    setSearchInput("");
+    router.replace("?");
+  }
 
   return (
     <>
       <SiteHeader title="Classes" />
       <div className="flex flex-1 flex-col gap-5 p-6">
-        <PageHeader
-          eyebrow="All Classes"
-          count={classes.length}
-          actionLabel="Add Class"
-        />
+        <div className="flex items-center justify-between">
+          <PageHeader eyebrow="All Classes" count={data?.classes.length} />
+          <EntityFormDialog
+            mode="add"
+            title="Add class"
+            description="Create a new class record."
+            fields={classFields}
+            open={addOpen}
+            onOpenChange={setAddOpen}
+            onSubmit={(values) => createClass.mutate(values)}
+            trigger={
+              <Button className="rounded-none">
+                <Plus className="size-4" /> Add Class
+              </Button>
+            }
+          />
+        </div>
+
         <DataToolbar
-          searchValue={search}
-          onSearchChange={setSearch}
-          searchPlaceholder="Search by class or teacher"
+          searchValue={searchInput}
+          onSearchChange={setSearchInput}
+          searchPlaceholder="Search by class or section"
         />
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((c) => (
-            <Card key={c.id} className="rounded-none shadow-none">
-              <CardHeader className="flex-row items-start justify-between border-b pb-4">
-                <div>
-                  <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                    Grade {c.grade}
-                  </span>
-                  <p className="mt-1 text-lg font-semibold tracking-tight">
-                    Section {c.section}
-                  </p>
-                </div>
-                <RowActions
-                  entityName={`Grade ${c.grade} - Section ${c.section}`}
-                  fields={classFields}
-                  values={{
-                    grade: String(c.grade),
-                    section: c.section,
-                    teacher: c.teacher,
-                    studentCount: String(c.studentCount),
-                  }}
-                  onEdit={() => {}}
-                  onDelete={() => {}}
-                />
-              </CardHeader>
-              <CardContent className="pt-4">
-                <p className="text-sm text-muted-foreground">
-                  Homeroom teacher
-                </p>
-                <p className="text-sm font-medium">{c.teacher}</p>
-                <div className="mt-4 flex items-center gap-2 border-t pt-4">
-                  <Users className="size-4 text-muted-foreground" />
-                  <span className="text-sm tabular-nums">
-                    {c.studentCount} students
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Class</TableHead>
+              <TableHead>Grade</TableHead>
+              <TableHead>Section</TableHead>
+              <TableHead>Homeroom teacher</TableHead>
+              <TableHead>Students</TableHead>
+              <TableHead className="w-28 text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+
+          {isLoading ? (
+            <TableSkeleton rows={6} columns={6} />
+          ) : (
+            <TableBody>
+              {data?.classes.map((classRow) => (
+                <TableRow key={classRow.id}>
+                  <TableCell className="font-medium">{classRow.name}</TableCell>
+                  <TableCell className="text-sm">
+                    Grade {classRow.grade}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {classRow.section || "-"}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {classRow.teacher}
+                  </TableCell>
+                  <TableCell className="text-sm tabular-nums">
+                    {classRow.studentCount}
+                  </TableCell>
+                  <TableCell>
+                    <RowActions
+                      entityName={`${classRow.name} - Grade ${classRow.grade}`}
+                      fields={classFields}
+                      values={{
+                        name: classRow.name,
+                        grade: String(classRow.grade),
+                        section: classRow.section,
+                      }}
+                      onEdit={(values) =>
+                        updateClass.mutate({ id: classRow.id, payload: values })
+                      }
+                      onDelete={() => deleteClass.mutate(classRow.id)}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          )}
+        </Table>
+
+        {isEmpty && (
+          <EntityEmptyState
+            icon={School}
+            entityLabel="class"
+            hasFilters={hasFilters}
+            onClearFilters={hasFilters ? clearFilters : undefined}
+            onAdd={!hasFilters ? () => setAddOpen(true) : undefined}
+            description="Once you add classes, they'll show up here with their grade, section, teacher, and student count."
+          />
+        )}
+
+        {!isEmpty && (
+          <PaginationBar
+            totalPage={data?.totalPages ?? 1}
+            currentPage={currentPage}
+          />
+        )}
       </div>
     </>
   );

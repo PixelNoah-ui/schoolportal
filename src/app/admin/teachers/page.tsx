@@ -1,7 +1,7 @@
 // app/admin/teachers/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Plus, Users } from "lucide-react";
 import { SiteHeader } from "@/components/admin/site-header";
@@ -33,6 +33,7 @@ import {
   useUpdateTeacher,
   useDeleteTeacher,
 } from "@/hooks/use-teachers";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 
 function initials(name: string) {
   return name
@@ -52,10 +53,15 @@ export default function TeachersPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const search = searchParams.get("search") ?? "";
+  const [searchInput, setSearchInput] = useState(search);
+  const debouncedSearch = useDebouncedValue(searchInput);
   const currentPage = Math.max(1, Number(searchParams.get("page") ?? "1"));
   const [addOpen, setAddOpen] = useState(false);
 
-  const { data, isLoading } = useTeachers({ search, page: currentPage });
+  const { data, isLoading } = useTeachers({
+    search: debouncedSearch,
+    page: currentPage,
+  });
   const createTeacher = useCreateTeacher();
   const updateTeacher = useUpdateTeacher();
   const deleteTeacher = useDeleteTeacher();
@@ -63,16 +69,25 @@ export default function TeachersPage() {
   const hasFilters = Boolean(search);
   const isEmpty = !isLoading && (data?.teachers.length ?? 0) === 0;
 
-  function updateQuery(value: string) {
-    const next = new URLSearchParams(searchParams);
-    if (value) next.set("search", value);
-    else next.delete("search");
-    next.delete("page");
-    router.push(`?${next.toString()}`);
-  }
+  const updateQuery = useCallback(
+    (value: string) => {
+      const next = new URLSearchParams(searchParams);
+      if (value) next.set("search", value);
+      else next.delete("search");
+      next.delete("page");
+      router.replace(`?${next.toString()}`);
+    },
+    [router, searchParams],
+  );
+
+  useEffect(() => {
+    if (debouncedSearch === search) return;
+    updateQuery(debouncedSearch);
+  }, [debouncedSearch, search, updateQuery]);
 
   function clearFilters() {
-    router.push("?");
+    setSearchInput("");
+    router.replace("?");
   }
 
   return (
@@ -98,8 +113,8 @@ export default function TeachersPage() {
         </div>
 
         <DataToolbar
-          searchValue={search}
-          onSearchChange={updateQuery}
+          searchValue={searchInput}
+          onSearchChange={setSearchInput}
           searchPlaceholder="Search by teacher name"
         />
 

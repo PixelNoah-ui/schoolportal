@@ -2,6 +2,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { SiteHeader } from "@/components/admin/site-header";
 import { PageHeader } from "@/components/admin/page-header";
 import { DataToolbar } from "@/components/admin/data-toolbar";
@@ -19,15 +20,16 @@ import { gradeRecords } from "@/lib/mock-data";
 
 export default function GradesPage() {
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
 
   const filtered = useMemo(
     () =>
       gradeRecords.filter(
         (g) =>
-          g.studentName.toLowerCase().includes(search.toLowerCase()) ||
-          g.subject.toLowerCase().includes(search.toLowerCase()),
+          g.studentName.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+          g.subject.toLowerCase().includes(debouncedSearch.toLowerCase()),
       ),
-    [search],
+    [debouncedSearch],
   );
 
   return (

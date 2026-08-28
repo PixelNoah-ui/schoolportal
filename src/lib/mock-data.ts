@@ -237,8 +237,6 @@ export interface GradeRecord {
   score: number;
 }
 
-export type PaymentStatus = "pending" | "approved" | "rejected";
-
 export interface PaymentRow {
   id: string;
   studentId: string;
@@ -252,64 +250,144 @@ export interface PaymentRow {
   note?: string;
 }
 
+// lib/mock-data.ts
+// Replace the existing `PaymentRow` interface and `payments` export with these.
+
+export type PaymentStatus = "pending" | "approved" | "rejected";
+
+export interface PaymentRow {
+  id: string;
+  studentId: string;
+  studentName: string;
+  studentNumber: string;
+  classId: string;
+  className: string;
+  amount: number;
+  paymentMonth: string; // "YYYY-MM"
+  status: PaymentStatus;
+  paymentMethod: "bank" | "cash" | "telebirr" | "other";
+  submittedAt: string; // "YYYY-MM-DD"
+  screenshotUrl: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  rejectionReason?: string;
+  note?: string;
+}
+
+// The month currently being collected — swap for a real "current cycle" query later.
+export const currentPaymentMonth = "2026-08";
+export const monthlyTuitionFee = 2500;
+export const paymentDueDay = 5; // due by the 5th of each month
+
 export const payments: PaymentRow[] = [
   {
     id: "pay1",
     studentId: "s1",
     studentName: "Betelhem Ashenafi",
     studentNumber: "STU-2026-0231",
+    classId: "c3",
+    className: "Grade 10 - A",
     amount: 2500,
     paymentMonth: "2026-08",
     status: "approved",
     paymentMethod: "telebirr",
     submittedAt: "2026-08-05",
+    screenshotUrl:
+      "https://placehold.co/500x900/e8f5e9/2e7d32?text=Telebirr+Receipt",
+    reviewedBy: "Admin",
+    reviewedAt: "2026-08-05",
   },
   {
     id: "pay2",
     studentId: "s2",
     studentName: "Nathnael Girma",
     studentNumber: "STU-2026-0230",
+    classId: "c2",
+    className: "Grade 9 - B",
     amount: 2500,
     paymentMonth: "2026-08",
     status: "pending",
     paymentMethod: "bank",
     submittedAt: "2026-08-08",
+    screenshotUrl: "https://placehold.co/500x900/e3f2fd/1565c0?text=Bank+Slip",
   },
   {
     id: "pay3",
     studentId: "s3",
     studentName: "Ruth Solomon",
     studentNumber: "STU-2026-0229",
+    classId: "c5",
+    className: "Grade 12 - A",
     amount: 2500,
     paymentMonth: "2026-08",
     status: "approved",
     paymentMethod: "cash",
     submittedAt: "2026-08-03",
+    screenshotUrl:
+      "https://placehold.co/500x900/e8f5e9/2e7d32?text=Cash+Receipt",
+    reviewedBy: "Admin",
+    reviewedAt: "2026-08-03",
   },
   {
     id: "pay4",
     studentId: "s4",
     studentName: "Abel Kebede",
     studentNumber: "STU-2026-0228",
+    classId: "c4",
+    className: "Grade 11 - A",
     amount: 2500,
     paymentMonth: "2026-08",
     status: "rejected",
     paymentMethod: "other",
     submittedAt: "2026-08-02",
-    note: "Payment proof was not readable.",
+    screenshotUrl:
+      "https://placehold.co/500x900/ffebee/c62828?text=Unreadable+Proof",
+    reviewedBy: "Admin",
+    reviewedAt: "2026-08-04",
+    rejectionReason:
+      "Payment proof was not readable. Please resubmit a clearer photo.",
   },
   {
     id: "pay5",
     studentId: "s5",
     studentName: "Liya Tadesse",
     studentNumber: "STU-2026-0227",
+    classId: "c1",
+    className: "Grade 9 - A",
     amount: 2500,
     paymentMonth: "2026-08",
     status: "pending",
     paymentMethod: "telebirr",
     submittedAt: "2026-08-09",
+    screenshotUrl:
+      "https://placehold.co/500x900/e3f2fd/1565c0?text=Telebirr+Receipt",
   },
+  // s6 and s7 have submitted nothing for 2026-08 — they'll surface under "Overdue".
 ];
+
+/** Students with no pending/approved payment on record for the given month. */
+export function getOverdueStudents(month: string = currentPaymentMonth) {
+  return allStudents.filter((student) => {
+    const covered = payments.some(
+      (p) =>
+        p.studentId === student.id &&
+        p.paymentMonth === month &&
+        (p.status === "approved" || p.status === "pending"),
+    );
+    return !covered;
+  });
+}
+
+/** Days overdue relative to the month's due date, using `asOf` as "today". */
+export function daysOverdue(
+  month: string,
+  asOf: Date = new Date("2026-08-28"),
+) {
+  const [year, mon] = month.split("-").map(Number);
+  const dueDate = new Date(year, mon - 1, paymentDueDay);
+  const diff = Math.floor((asOf.getTime() - dueDate.getTime()) / 86_400_000);
+  return Math.max(diff, 0);
+}
 
 export const allTeachers: TeacherRow[] = [
   {
@@ -715,5 +793,216 @@ export const rankingData: RankingRow[] = [
     className: "Grade 12 - A",
     semester1: 71.2,
     semester2: 75.8,
+  },
+];
+// --- append to lib/mock-data.ts ---
+
+export type GradeSubmissionStatus = "not_started" | "in_progress" | "complete";
+
+export interface SubjectSubmission {
+  id: string;
+  classId: string;
+  subjectName: string;
+  teacher: string;
+  semester: string; // matches AcademicYearRow.semesters[].name
+  status: GradeSubmissionStatus;
+  submitted: number;
+  total: number;
+}
+
+// Tracks whether each subject's grades have been entered for a class/semester.
+// This is what drives "provisional vs final" ranking — swap for a real query
+// (grade rows submitted vs class roster size) once this is backed by a DB.
+export const gradeSubmissions: SubjectSubmission[] = [
+  // Semester 1 — mostly closed out
+  {
+    id: "gs-c1-ict-s1",
+    classId: "c1",
+    subjectName: "ICT",
+    teacher: "Kalab Fikru",
+    semester: "Semester 1",
+    status: "complete",
+    submitted: 36,
+    total: 36,
+  },
+  {
+    id: "gs-c1-eng-s1",
+    classId: "c1",
+    subjectName: "English",
+    teacher: "Selam Girma",
+    semester: "Semester 1",
+    status: "complete",
+    submitted: 36,
+    total: 36,
+  },
+  {
+    id: "gs-c2-phy-s1",
+    classId: "c2",
+    subjectName: "Physics",
+    teacher: "Yonas Bekele",
+    semester: "Semester 1",
+    status: "complete",
+    submitted: 34,
+    total: 34,
+  },
+  {
+    id: "gs-c2-chem-s1",
+    classId: "c2",
+    subjectName: "Chemistry",
+    teacher: "Yonas Bekele",
+    semester: "Semester 1",
+    status: "not_started",
+    submitted: 0,
+    total: 34,
+  },
+  {
+    id: "gs-c3-eng-s1",
+    classId: "c3",
+    subjectName: "English",
+    teacher: "Selam Girma",
+    semester: "Semester 1",
+    status: "complete",
+    submitted: 33,
+    total: 33,
+  },
+  {
+    id: "gs-c3-math-s1",
+    classId: "c3",
+    subjectName: "Mathematics",
+    teacher: "Meron Tesfaye",
+    semester: "Semester 1",
+    status: "complete",
+    submitted: 33,
+    total: 33,
+  },
+  {
+    id: "gs-c4-bio-s1",
+    classId: "c4",
+    subjectName: "Biology",
+    teacher: "Dawit Alemu",
+    semester: "Semester 1",
+    status: "complete",
+    submitted: 31,
+    total: 31,
+  },
+  {
+    id: "gs-c4-hist-s1",
+    classId: "c4",
+    subjectName: "History",
+    teacher: "Hana Worku",
+    semester: "Semester 1",
+    status: "in_progress",
+    submitted: 22,
+    total: 31,
+  },
+  {
+    id: "gs-c5-math-s1",
+    classId: "c5",
+    subjectName: "Mathematics",
+    teacher: "Meron Tesfaye",
+    semester: "Semester 1",
+    status: "complete",
+    submitted: 29,
+    total: 29,
+  },
+
+  // Semester 2 — mid-term, most teachers still entering
+  {
+    id: "gs-c1-ict-s2",
+    classId: "c1",
+    subjectName: "ICT",
+    teacher: "Kalab Fikru",
+    semester: "Semester 2",
+    status: "complete",
+    submitted: 36,
+    total: 36,
+  },
+  {
+    id: "gs-c1-eng-s2",
+    classId: "c1",
+    subjectName: "English",
+    teacher: "Selam Girma",
+    semester: "Semester 2",
+    status: "in_progress",
+    submitted: 20,
+    total: 36,
+  },
+  {
+    id: "gs-c2-phy-s2",
+    classId: "c2",
+    subjectName: "Physics",
+    teacher: "Yonas Bekele",
+    semester: "Semester 2",
+    status: "not_started",
+    submitted: 0,
+    total: 34,
+  },
+  {
+    id: "gs-c3-eng-s2",
+    classId: "c3",
+    subjectName: "English",
+    teacher: "Selam Girma",
+    semester: "Semester 2",
+    status: "complete",
+    submitted: 33,
+    total: 33,
+  },
+  {
+    id: "gs-c3-math-s2",
+    classId: "c3",
+    subjectName: "Mathematics",
+    teacher: "Meron Tesfaye",
+    semester: "Semester 2",
+    status: "in_progress",
+    submitted: 18,
+    total: 33,
+  },
+  {
+    id: "gs-c4-bio-s2",
+    classId: "c4",
+    subjectName: "Biology",
+    teacher: "Dawit Alemu",
+    semester: "Semester 2",
+    status: "not_started",
+    submitted: 0,
+    total: 31,
+  },
+  {
+    id: "gs-c5-math-s2",
+    classId: "c5",
+    subjectName: "Mathematics",
+    teacher: "Meron Tesfaye",
+    semester: "Semester 2",
+    status: "in_progress",
+    submitted: 15,
+    total: 29,
+  },
+];
+
+export type StudentStanding = "disciplinary" | "excused" | "withdrawn";
+
+export interface StandingRecord {
+  studentId: string;
+  standing: StudentStanding;
+  reason: string;
+  semester: string;
+}
+
+// A student in one of these states still shows up in listings, but is
+// excluded from *numeric rank* for the affected semester — e.g. an academic
+// integrity case pending review, or an approved absence from the exam.
+export const studentStandings: StandingRecord[] = [
+  {
+    studentId: "s4",
+    standing: "disciplinary",
+    reason:
+      "Academic integrity violation during final exam — pending disciplinary review",
+    semester: "Semester 1",
+  },
+  {
+    studentId: "s9",
+    standing: "excused",
+    reason: "Approved medical leave — did not sit the semester exam",
+    semester: "Semester 1",
   },
 ];

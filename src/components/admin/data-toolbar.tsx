@@ -1,7 +1,8 @@
 // components/admin/data-toolbar.tsx
 "use client";
 
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -43,8 +44,20 @@ export function DataToolbar({
           value={searchValue}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder={searchPlaceholder}
-          className="rounded-none pl-8"
+          className="rounded-none pl-8 pr-8"
         />
+        {searchValue && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Clear search"
+            className="absolute right-0 top-0 size-8 rounded-none text-muted-foreground hover:text-foreground"
+            onClick={() => onSearchChange("")}
+          >
+            <X className="size-4" />
+          </Button>
+        )}
       </div>
       {filterOptions && onFilterChange && (
         <Select
