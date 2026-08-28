@@ -200,12 +200,14 @@ export interface TeacherRow {
   subjects: string[];
   classCount: number;
   phone: string;
+  temporaryPassword?: string;
 }
 
 export interface AllStudentRow extends StudentRow {
   phone: string;
   dob: string;
   classId: string;
+  temporaryPassword?: string;
 }
 
 export interface SubjectRow {

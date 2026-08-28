@@ -1,8 +1,9 @@
 // app/admin/students/page.tsx
 "use client";
 
-import { useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { GraduationCap, Plus } from "lucide-react";
 import { SiteHeader } from "@/components/admin/site-header";
 import { PageHeader } from "@/components/admin/page-header";
 import { DataToolbar } from "@/components/admin/data-toolbar";
@@ -13,9 +14,10 @@ import {
 } from "@/components/admin/entity-form-dialog";
 import { GradeBadge } from "@/components/admin/grade-badge";
 import { TableSkeleton } from "@/components/admin/table-skeleton";
+import { EntityEmptyState } from "@/components/admin/entity-empty-state";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import PaginationBar from "@/components/PaginationBar";
 import {
   Table,
   TableBody,
@@ -43,42 +45,55 @@ function initials(name: string) {
 const studentFields: FieldConfig[] = [
   { name: "full_name", label: "Full name" },
   { name: "email", label: "Email", type: "email" },
-  { name: "student_number", label: "Student number" },
   { name: "phone", label: "Phone" },
   { name: "dob", label: "Date of birth", type: "date" },
 ];
 
 export default function StudentsPage() {
-  const [search, setSearch] = useState("");
-  const [classFilter, setClassFilter] = useState("all");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const search = searchParams.get("search") ?? "";
+  const classFilter = searchParams.get("class") ?? "all";
+  const currentPage = Math.max(1, Number(searchParams.get("page") ?? "1"));
+  const [addOpen, setAddOpen] = useState(false);
 
-  const { data: students, isLoading } = useStudents();
+  const { data, isLoading } = useStudents({
+    search,
+    classId: classFilter,
+    page: currentPage,
+  });
   const createStudent = useCreateStudent();
   const updateStudent = useUpdateStudent();
   const deleteStudent = useDeleteStudent();
 
-  const filtered = useMemo(() => {
-    if (!students) return [];
-    return students.filter((s) => {
-      const matchesSearch =
-        s.profile.full_name.toLowerCase().includes(search.toLowerCase()) ||
-        s.student_number.toLowerCase().includes(search.toLowerCase());
-      const matchesClass = classFilter === "all" || s.classId === classFilter;
-      return matchesSearch && matchesClass;
-    });
-  }, [students, search, classFilter]);
+  const hasFilters = Boolean(search) || classFilter !== "all";
+  const isEmpty = !isLoading && (data?.students.length ?? 0) === 0;
+
+  function updateQuery(key: string, value: string) {
+    const next = new URLSearchParams(searchParams);
+    if (!value || value === "all") next.delete(key);
+    else next.set(key, value);
+    next.delete("page");
+    router.push(`?${next.toString()}`);
+  }
+
+  function clearFilters() {
+    router.push("?");
+  }
 
   return (
     <>
       <SiteHeader title="Students" />
       <div className="flex flex-1 flex-col gap-5 p-6">
         <div className="flex items-center justify-between">
-          <PageHeader eyebrow="All Students" count={students?.length} />
+          <PageHeader eyebrow="All Students" count={data?.totalPages} />
           <EntityFormDialog
             mode="add"
             title="Add student"
             description="Create a new student record."
             fields={studentFields}
+            open={addOpen}
+            onOpenChange={setAddOpen}
             onSubmit={(values) => createStudent.mutate(values)}
             trigger={
               <Button className="rounded-none">
@@ -90,107 +105,114 @@ export default function StudentsPage() {
 
         <DataToolbar
           searchValue={search}
-          onSearchChange={setSearch}
-          searchPlaceholder="Search by name or student no."
+          onSearchChange={(value) => updateQuery("search", value)}
+          searchPlaceholder="Search by name or username"
           filterOptions={classes.map((c) => ({
             label: `Grade ${c.grade} - ${c.section}`,
             value: c.id,
           }))}
           filterValue={classFilter}
-          onFilterChange={setClassFilter}
+          onFilterChange={(value) => updateQuery("class", value)}
           filterLabel="All Classes"
         />
 
-        <Card className="rounded-none shadow-none">
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Student</TableHead>
-                  <TableHead>Student No.</TableHead>
-                  <TableHead>Class</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Date of Birth</TableHead>
-                  <TableHead>Avg. Score</TableHead>
-                  <TableHead className="w-28 text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Student</TableHead>
+              <TableHead>Username</TableHead>
+              <TableHead>Temporary Password</TableHead>
+              <TableHead>Class</TableHead>
+              <TableHead>Phone</TableHead>
+              <TableHead>Date of Birth</TableHead>
+              <TableHead>Avg. Score</TableHead>
+              <TableHead className="w-28 text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
 
-              {isLoading ? (
-                <TableSkeleton rows={6} columns={7} />
-              ) : (
-                <TableBody>
-                  {filtered.map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar className="size-8 rounded-none">
-                            <AvatarFallback className="rounded-none bg-secondary text-xs">
-                              {initials(s.profile.full_name)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex flex-col">
-                            <span className="text-sm font-medium">
-                              {s.profile.full_name}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {s.profile.email}
-                            </span>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">
-                        {s.student_number}
-                      </TableCell>
-                      <TableCell className="text-sm">{s.className}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {s.phone}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {s.dob}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm tabular-nums">
-                            {s.avgScore.toFixed(1)}
-                          </span>
-                          <GradeBadge score={s.avgScore} />
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <RowActions
-                          entityName={s.profile.full_name}
-                          fields={studentFields}
-                          values={{
-                            full_name: s.profile.full_name,
-                            email: s.profile.email,
-                            student_number: s.student_number,
-                            phone: s.phone,
-                            dob: s.dob,
-                          }}
-                          onEdit={(values) =>
-                            updateStudent.mutate({ id: s.id, payload: values })
-                          }
-                          onDelete={() => deleteStudent.mutate(s.id)}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {filtered.length === 0 && (
-                    <TableRow>
-                      <TableCell
-                        colSpan={7}
-                        className="py-10 text-center text-sm text-muted-foreground"
-                      >
-                        No students match your search.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              )}
-            </Table>
-          </CardContent>
-        </Card>
+          {isLoading ? (
+            <TableSkeleton rows={6} columns={7} />
+          ) : (
+            <TableBody>
+              {data?.students.map((s) => (
+                <TableRow key={s.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <Avatar className="size-8 rounded-none">
+                        <AvatarFallback className="rounded-none bg-secondary text-xs">
+                          {initials(s.profile.full_name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">
+                          {s.profile.full_name}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {s.profile.email}
+                        </span>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">
+                    {s.profile.username}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">
+                    {s.temporaryPassword ?? "-"}
+                  </TableCell>
+                  <TableCell className="text-sm">{s.className}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {s.phone}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {s.dob}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm tabular-nums">
+                        {s.avgScore.toFixed(1)}
+                      </span>
+                      <GradeBadge score={s.avgScore} />
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <RowActions
+                      entityName={s.profile.full_name}
+                      fields={studentFields}
+                      values={{
+                        full_name: s.profile.full_name,
+                        email: s.profile.email,
+                        phone: s.phone,
+                        dob: s.dob,
+                      }}
+                      onEdit={(values) =>
+                        updateStudent.mutate({ id: s.id, payload: values })
+                      }
+                      onDelete={() => deleteStudent.mutate(s.id)}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          )}
+        </Table>
+
+        {isEmpty && (
+          <EntityEmptyState
+            icon={GraduationCap}
+            entityLabel="student"
+            hasFilters={hasFilters}
+            onClearFilters={hasFilters ? clearFilters : undefined}
+            onAdd={!hasFilters ? () => setAddOpen(true) : undefined}
+            description="Once you enroll students, they'll show up here with their class, contact details, and average score."
+          />
+        )}
+
+        {!isEmpty && (
+          <PaginationBar
+            totalPage={data?.totalPages ?? 1}
+            currentPage={currentPage}
+          />
+        )}
       </div>
     </>
   );

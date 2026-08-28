@@ -6,7 +6,7 @@ import { SiteHeader } from "@/components/admin/site-header";
 import { PageHeader } from "@/components/admin/page-header";
 import { DataToolbar } from "@/components/admin/data-toolbar";
 import { GradeBadge } from "@/components/admin/grade-badge";
-import { Card, CardContent } from "@/components/ui/card";
+import PaginationBar from "@/components/PaginationBar";
 import {
   Table,
   TableBody,
@@ -44,44 +44,41 @@ export default function GradesPage() {
           onSearchChange={setSearch}
           searchPlaceholder="Search by student or subject"
         />
-        <Card className="rounded-none shadow-none">
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Student</TableHead>
-                  <TableHead>Subject</TableHead>
-                  <TableHead>Class</TableHead>
-                  <TableHead>Semester</TableHead>
-                  <TableHead>Score</TableHead>
-                  <TableHead>Grade</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((g) => (
-                  <TableRow key={g.id}>
-                    <TableCell className="text-sm font-medium">
-                      {g.studentName}
-                    </TableCell>
-                    <TableCell className="text-sm">{g.subject}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {g.className}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {g.semester}
-                    </TableCell>
-                    <TableCell className="text-sm tabular-nums">
-                      {g.score.toFixed(1)}
-                    </TableCell>
-                    <TableCell>
-                      <GradeBadge score={g.score} />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Student</TableHead>
+              <TableHead>Subject</TableHead>
+              <TableHead>Class</TableHead>
+              <TableHead>Semester</TableHead>
+              <TableHead>Score</TableHead>
+              <TableHead>Grade</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtered.map((g) => (
+              <TableRow key={g.id}>
+                <TableCell className="text-sm font-medium">
+                  {g.studentName}
+                </TableCell>
+                <TableCell className="text-sm">{g.subject}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {g.className}
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {g.semester}
+                </TableCell>
+                <TableCell className="text-sm tabular-nums">
+                  {g.score.toFixed(1)}
+                </TableCell>
+                <TableCell>
+                  <GradeBadge score={g.score} />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        <PaginationBar totalPage={3} currentPage={1} />
       </div>
     </>
   );

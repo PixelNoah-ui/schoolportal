@@ -8,7 +8,7 @@ import { DataToolbar } from "@/components/admin/data-toolbar";
 import { RowActions } from "@/components/admin/row-actions";
 import type { FieldConfig } from "@/components/admin/entity-form-dialog";
 import { GradeBadge } from "@/components/admin/grade-badge";
-import { Card, CardContent } from "@/components/ui/card";
+import PaginationBar from "@/components/PaginationBar";
 import {
   Table,
   TableBody,
@@ -58,55 +58,50 @@ export default function SubjectsPage() {
           onFilterChange={setClassFilter}
           filterLabel="All Classes"
         />
-        <Card className="rounded-none shadow-none">
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Subject</TableHead>
-                  <TableHead>Class</TableHead>
-                  <TableHead>Teacher</TableHead>
-                  <TableHead>Class Average</TableHead>
-                  <TableHead className="w-10" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((s) => (
-                  <TableRow key={s.id}>
-                    <TableCell className="text-sm font-medium">
-                      {s.name}
-                    </TableCell>
-                    <TableCell className="text-sm">{s.className}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {s.teacher}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm tabular-nums">
-                          {s.avgScore.toFixed(1)}%
-                        </span>
-                        <GradeBadge score={s.avgScore} />
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <RowActions
-                        entityName={s.name}
-                        fields={subjectFields}
-                        values={{
-                          name: s.name,
-                          className: s.className,
-                          avgScore: String(s.avgScore),
-                        }}
-                        onEdit={() => {}}
-                        onDelete={() => {}}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Subject</TableHead>
+              <TableHead>Class</TableHead>
+              <TableHead>Teacher</TableHead>
+              <TableHead>Class Average</TableHead>
+              <TableHead className="w-10" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtered.map((s) => (
+              <TableRow key={s.id}>
+                <TableCell className="text-sm font-medium">{s.name}</TableCell>
+                <TableCell className="text-sm">{s.className}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {s.teacher}
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm tabular-nums">
+                      {s.avgScore.toFixed(1)}%
+                    </span>
+                    <GradeBadge score={s.avgScore} />
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <RowActions
+                    entityName={s.name}
+                    fields={subjectFields}
+                    values={{
+                      name: s.name,
+                      className: s.className,
+                      avgScore: String(s.avgScore),
+                    }}
+                    onEdit={() => {}}
+                    onDelete={() => {}}
+                  />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        <PaginationBar totalPage={3} currentPage={1} />
       </div>
     </>
   );

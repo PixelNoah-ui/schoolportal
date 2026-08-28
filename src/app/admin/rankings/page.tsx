@@ -7,6 +7,7 @@ import { SiteHeader } from "@/components/admin/site-header";
 import { PageHeader } from "@/components/admin/page-header";
 import { DataToolbar } from "@/components/admin/data-toolbar";
 import { GradeBadge } from "@/components/admin/grade-badge";
+import PaginationBar from "@/components/PaginationBar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -185,64 +186,61 @@ export default function RankingsPage() {
             filterLabel="All Classes"
           />
 
-          <Card className="rounded-none shadow-none">
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="w-16">Rank</TableHead>
-                    <TableHead>Student</TableHead>
-                    <TableHead>Class</TableHead>
-                    <TableHead>{periodLabel[period]} Score</TableHead>
-                    <TableHead>Grade</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {ranked.map((r) => (
-                    <TableRow
-                      key={r.studentId}
-                      className={r.rank <= 3 ? "bg-muted/30" : undefined}
-                    >
-                      <TableCell>
-                        <RankIndicator rank={r.rank} />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar className="size-8 rounded-none">
-                            <AvatarFallback className="rounded-none bg-secondary text-xs">
-                              {initials(r.studentName)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-sm font-medium">
-                            {r.studentName}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {r.className}
-                      </TableCell>
-                      <TableCell className="text-sm font-semibold tabular-nums">
-                        {r.score.toFixed(1)}%
-                      </TableCell>
-                      <TableCell>
-                        <GradeBadge score={r.score} />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {ranked.length === 0 && (
-                    <TableRow>
-                      <TableCell
-                        colSpan={5}
-                        className="py-10 text-center text-sm text-muted-foreground"
-                      >
-                        No students match your filters.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="w-16">Rank</TableHead>
+                <TableHead>Student</TableHead>
+                <TableHead>Class</TableHead>
+                <TableHead>{periodLabel[period]} Score</TableHead>
+                <TableHead>Grade</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {ranked.map((r) => (
+                <TableRow
+                  key={r.studentId}
+                  className={r.rank <= 3 ? "bg-muted/30" : undefined}
+                >
+                  <TableCell>
+                    <RankIndicator rank={r.rank} />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <Avatar className="size-8 rounded-none">
+                        <AvatarFallback className="rounded-none bg-secondary text-xs">
+                          {initials(r.studentName)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm font-medium">
+                        {r.studentName}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {r.className}
+                  </TableCell>
+                  <TableCell className="text-sm font-semibold tabular-nums">
+                    {r.score.toFixed(1)}%
+                  </TableCell>
+                  <TableCell>
+                    <GradeBadge score={r.score} />
+                  </TableCell>
+                </TableRow>
+              ))}
+              {ranked.length === 0 && (
+                <TableRow>
+                  <TableCell
+                    colSpan={5}
+                    className="py-10 text-center text-sm text-muted-foreground"
+                  >
+                    No students match your filters.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+          <PaginationBar totalPage={3} currentPage={1} />
         </div>
       </div>
     </>

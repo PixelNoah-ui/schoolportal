@@ -5,12 +5,16 @@ import {
   createTeacher,
   updateTeacher,
   deleteTeacher,
+  type TeacherListParams,
 } from "@/lib/api/teachers";
 
 export const teachersKey = ["teachers"] as const;
 
-export function useTeachers() {
-  return useQuery({ queryKey: teachersKey, queryFn: fetchTeachers });
+export function useTeachers(params: TeacherListParams = {}) {
+  return useQuery({
+    queryKey: [...teachersKey, params],
+    queryFn: () => fetchTeachers(params),
+  });
 }
 
 export function useCreateTeacher() {

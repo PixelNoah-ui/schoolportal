@@ -5,12 +5,16 @@ import {
   createStudent,
   updateStudent,
   deleteStudent,
+  type StudentListParams,
 } from "@/lib/api/students";
 
 export const studentsKey = ["students"] as const;
 
-export function useStudents() {
-  return useQuery({ queryKey: studentsKey, queryFn: fetchStudents });
+export function useStudents(params: StudentListParams = {}) {
+  return useQuery({
+    queryKey: [...studentsKey, params],
+    queryFn: () => fetchStudents(params),
+  });
 }
 
 export function useCreateStudent() {

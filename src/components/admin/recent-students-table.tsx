@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { recentStudents } from "@/lib/mock-data";
+import type { AllStudentRow } from "@/lib/mock-data";
 import { GradeBadge } from "./grade-badge";
 
 function initials(name: string) {
@@ -20,7 +20,11 @@ function initials(name: string) {
     .join("");
 }
 
-export function RecentStudentsTable() {
+export function RecentStudentsTable({
+  students,
+}: {
+  students: AllStudentRow[];
+}) {
   return (
     <Card className="rounded-none shadow-none">
       <CardHeader className="border-b pb-4">
@@ -40,7 +44,7 @@ export function RecentStudentsTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {recentStudents.map((s) => (
+            {students.map((s) => (
               <TableRow key={s.id}>
                 <TableCell>
                   <div className="flex items-center gap-3">

@@ -1,8 +1,11 @@
 // components/admin/enrollment-chart.tsx
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { enrollmentByGrade } from "@/lib/mock-data";
 
-export function EnrollmentChart() {
+export function EnrollmentChart({
+  enrollmentByGrade,
+}: {
+  enrollmentByGrade: { grade: string; count: number }[];
+}) {
   const max = Math.max(...enrollmentByGrade.map((d) => d.count));
 
   return (

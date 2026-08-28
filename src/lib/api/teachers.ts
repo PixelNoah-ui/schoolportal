@@ -1,29 +1,113 @@
-// lib/api/teachers.ts
-import { allTeachers, type TeacherRow } from "@/lib/mock-data";
+import type { Profile, TeacherRow } from "@/lib/mock-data";
+import { createClient } from "@/utils/supabase/client";
 
-const DELAY = 600;
-const delay = <T>(data: T): Promise<T> =>
-  new Promise((resolve) => setTimeout(() => resolve(data), DELAY));
+export interface TeacherListParams {
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}
 
-export async function fetchTeachers(): Promise<TeacherRow[]> {
-  console.log("[API] GET /teachers");
-  return delay(allTeachers);
+export interface TeacherListResult {
+  teachers: TeacherRow[];
+  totalPages: number;
+}
+
+type TeacherRecord = {
+  id: string;
+  profile_id: string;
+  phone: string | null;
+  temporary_password: string | null;
+  created_at: string;
+  profiles: Profile[];
+  class_subjects: { subjects: { name: string }[] }[];
+};
+
+function mapTeacher(teacher: TeacherRecord): TeacherRow {
+  const profile = teacher.profiles[0];
+  const subjects = teacher.class_subjects.flatMap((assignment) =>
+    assignment.subjects.map((subject) => subject.name),
+  );
+  return {
+    id: teacher.id,
+    teacher_number: "",
+    profile,
+    subjects: [...new Set(subjects)],
+    classCount: teacher.class_subjects.length,
+    phone: teacher.phone ?? "",
+    temporaryPassword: teacher.temporary_password ?? undefined,
+  };
+}
+
+export async function fetchTeachers({
+  search = "",
+  page = 1,
+  pageSize = 10,
+}: TeacherListParams = {}): Promise<TeacherListResult> {
+  const supabase = createClient();
+  const from = Math.max(0, page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  let request = supabase
+    .from("teachers")
+    .select(
+      "id, profile_id, phone, temporary_password, created_at, profiles!teachers_profile_id_fkey(id, full_name, username, email, role), class_subjects(subjects(name))",
+      { count: "exact" },
+    )
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  if (search.trim()) {
+    request = request.or(
+      `full_name.ilike.%${search.trim()}%,username.ilike.%${search.trim()}%`,
+      { foreignTable: "profiles" },
+    );
+  }
+
+  const { data, error, count } = await request;
+  if (error) throw new Error(error.message);
+  return {
+    teachers: (data as TeacherRecord[]).map(mapTeacher),
+    totalPages: Math.max(1, Math.ceil((count ?? 0) / pageSize)),
+  };
 }
 
 export async function createTeacher(payload: Record<string, string>) {
-  console.log("[API] POST /teachers", payload);
-  return delay({ id: crypto.randomUUID(), ...payload });
+  const response = await fetch("/api/teachers", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error ?? "Could not create teacher");
+  return result as TeacherRow;
 }
 
 export async function updateTeacher(
   id: string,
   payload: Record<string, string>,
 ) {
-  console.log("[API] PATCH /teachers/" + id, payload);
-  return delay({ id, ...payload });
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("teachers")
+    .update({ phone: payload.phone })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  const { data: teacher } = await supabase
+    .from("teachers")
+    .select("profile_id")
+    .eq("id", id)
+    .single();
+  if (!teacher) throw new Error("Teacher not found");
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .update({ full_name: payload.full_name, email: payload.email })
+    .eq("id", teacher.profile_id);
+  if (profileError) throw new Error(profileError.message);
+  return { id, ...payload };
 }
 
 export async function deleteTeacher(id: string) {
-  console.log("[API] DELETE /teachers/" + id);
-  return delay({ id });
+  const supabase = createClient();
+  const { error } = await supabase.from("teachers").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+  return { id };
 }
