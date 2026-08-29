@@ -1,9 +1,11 @@
 // app/admin/rankings/page.tsx
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useRankings } from "@/hooks/use-rankings";
 import { ChevronRight, Trophy } from "lucide-react";
 import { SiteHeader } from "@/components/admin/site-header";
 import { PageHeader } from "@/components/admin/page-header";
@@ -11,7 +13,8 @@ import { DataToolbar } from "@/components/admin/data-toolbar";
 import { GradeBadge } from "@/components/admin/grade-badge";
 import { RankIndicator } from "@/components/admin/rank-indicator";
 import { StudentStatusBadge } from "@/components/admin/rankings/student-status-badge";
-import { CompletionBanner } from "@/components/admin/rankings/completion-banner";
+import { TableSkeleton } from "@/components/admin/table-skeleton";
+import { EntityEmptyState } from "@/components/admin/entity-empty-state";
 import PaginationBar from "@/components/PaginationBar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { buttonVariants } from "@/components/ui/button";
@@ -32,18 +35,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { rankingData, classes, academicYears } from "@/lib/mock-data";
 import {
   type Period,
   periodLabel,
   rankStudents,
-  getClassCompletion,
-  getOverallCompletion,
-  currentAcademicYearRecord,
   type RankedRow,
-} from "@/utils/supabase/ranking-utils";
+} from "@/lib/ranking-utils";
+import type { ClassRow, RankingRow } from "@/lib/mock-data";
 
 const PAGE_SIZE = 10;
+const emptyRankingData: RankingRow[] = [];
+const emptyClasses: ClassRow[] = [];
 
 function initials(name: string) {
   return name
@@ -54,16 +56,32 @@ function initials(name: string) {
 }
 
 export default function RankingsPage() {
-  const [period, setPeriod] = useState<Period>("sem1");
-  const [academicYearId, setAcademicYearId] = useState(
-    currentAcademicYearRecord.id,
-  );
-  const [search, setSearch] = useState("");
-  const debouncedSearch = useDebouncedValue(search);
-  const [classFilter, setClassFilter] = useState("all");
-  const [page, setPage] = useState(1);
-
-  const isArchivedYear = academicYearId !== currentAcademicYearRecord.id;
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const academicYearParam = searchParams.get("year") ?? "";
+  const period = (searchParams.get("period") ?? "sem1") as Period;
+  const classFilter = searchParams.get("class") ?? "all";
+  const searchParam = searchParams.get("search") ?? "";
+  const page = Math.max(1, Number(searchParams.get("page") ?? "1"));
+  const [searchInput, setSearchInput] = useState(searchParam);
+  const debouncedSearch = useDebouncedValue(searchInput);
+  const rankingsQuery = useRankings({
+    academicYearId: academicYearParam || undefined,
+    period,
+    classId: classFilter,
+    search: debouncedSearch,
+  });
+  const rankingData = rankingsQuery.data?.rankingData ?? emptyRankingData;
+  const classes = rankingsQuery.data?.classes ?? emptyClasses;
+  const academicYears = rankingsQuery.data?.academicYears ?? [];
+  const currentAcademicYearRecord =
+    academicYears.find((year) => year.is_current) ?? academicYears[0];
+  const isLoading = rankingsQuery.isLoading;
+  const activeAcademicYearId =
+    academicYearParam || currentAcademicYearRecord?.id;
+  const isArchivedYear =
+    Boolean(currentAcademicYearRecord) &&
+    activeAcademicYearId !== currentAcademicYearRecord.id;
 
   const rankedByClass = useMemo(() => {
     if (isArchivedYear) return [];
@@ -75,39 +93,34 @@ export default function RankingsPage() {
       return {
         ...c,
         top5: ranked.slice(0, 5),
-        completion: getClassCompletion(c.id, period),
       };
     });
-  }, [period, isArchivedYear]);
+  }, [classes, isArchivedYear, period, rankingData]);
 
-  const overallCompletion = useMemo(
-    () => getOverallCompletion(period),
-    [period],
+  const rankedFull = useMemo(
+    () => (isArchivedYear ? [] : rankStudents(rankingData, period)),
+    [isArchivedYear, period, rankingData],
   );
-
-  const rankedFull = useMemo(() => {
-    if (isArchivedYear) return [];
-    const filteredRows = rankingData.filter(
-      (r) =>
-        (classFilter === "all" || r.classId === classFilter) &&
-        r.studentName.toLowerCase().includes(debouncedSearch.toLowerCase()),
-    );
-    return rankStudents(filteredRows, period);
-  }, [period, debouncedSearch, classFilter, isArchivedYear]);
 
   const totalPage = Math.max(1, Math.ceil(rankedFull.length / PAGE_SIZE));
   const pageStart = (page - 1) * PAGE_SIZE;
   const pageRows = rankedFull.slice(pageStart, pageStart + PAGE_SIZE);
 
-  function handlePeriodChange(v: string) {
-    setPeriod(v as Period);
-    setPage(1);
-  }
+  const updateQuery = useCallback(
+    (key: string, value: string) => {
+      const next = new URLSearchParams(searchParams);
+      if (!value || value === "all" || (key === "period" && value === "sem1"))
+        next.delete(key);
+      else next.set(key, value);
+      if (key !== "page") next.delete("page");
+      router.replace(`?${next.toString()}`);
+    },
+    [router, searchParams],
+  );
 
-  function handleClassFilterChange(v: string) {
-    setClassFilter(v);
-    setPage(1);
-  }
+  useEffect(() => {
+    if (debouncedSearch !== searchParam) updateQuery("search", debouncedSearch);
+  }, [debouncedSearch, searchParam, updateQuery]);
 
   return (
     <>
@@ -119,9 +132,8 @@ export default function RankingsPage() {
             <Select
               value={academicYearId}
               onValueChange={(v) => {
-                if (v === null) return;
-                setAcademicYearId(v);
-                setPage(1);
+                if (!v) return;
+                updateQuery("year", v);
               }}
             >
               <SelectTrigger className="w-full rounded-none sm:w-44">
@@ -136,7 +148,10 @@ export default function RankingsPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Tabs value={period} onValueChange={handlePeriodChange}>
+            <Tabs
+              value={period}
+              onValueChange={(value) => updateQuery("period", value)}
+            >
               <TabsList className="rounded-none">
                 <TabsTrigger value="sem1" className="rounded-none">
                   Semester 1
@@ -152,19 +167,22 @@ export default function RankingsPage() {
           </div>
         </div>
 
-        {isArchivedYear ? (
+        {isLoading ? (
+          <Table>
+            <TableSkeleton rows={8} columns={6} />
+          </Table>
+        ) : isArchivedYear ? (
           <div className="border px-4 py-10 text-center text-sm text-muted-foreground">
             No ranking data available for{" "}
-            {academicYears.find((y) => y.id === academicYearId)?.name} in this
-            preview.
+            {academicYears.find((y) => y.id === activeAcademicYearId)?.name} in
+            this preview.
           </div>
         ) : (
           <>
-            <CompletionBanner
-              period={period}
-              percent={overallCompletion.percent}
-              pendingCount={overallCompletion.pendingClasses.length}
-            />
+            <div className="border px-4 py-3 text-xs text-muted-foreground">
+              Rankings are calculated from finalized grades for{" "}
+              {periodLabel[period]}.
+            </div>
 
             <div>
               <div className="mb-3 flex items-center gap-2">
@@ -185,9 +203,7 @@ export default function RankingsPage() {
                           Section {c.section}
                         </p>
                         <p className="mt-0.5 text-[11px] text-muted-foreground">
-                          {c.completion.status === "complete"
-                            ? "Grades final"
-                            : `${c.completion.percent}% submitted`}
+                          Finalized grades only
                         </p>
                       </div>
                       <Link
@@ -240,10 +256,9 @@ export default function RankingsPage() {
               </span>
 
               <DataToolbar
-                searchValue={search}
+                searchValue={searchInput}
                 onSearchChange={(v) => {
-                  setSearch(v);
-                  setPage(1);
+                  setSearchInput(v);
                 }}
                 searchPlaceholder="Search by student name"
                 filterOptions={classes.map((c) => ({
@@ -251,7 +266,7 @@ export default function RankingsPage() {
                   value: c.id,
                 }))}
                 filterValue={classFilter}
-                onFilterChange={handleClassFilterChange}
+                onFilterChange={(value) => updateQuery("class", value)}
                 filterLabel="All Classes"
               />
 
@@ -310,7 +325,7 @@ export default function RankingsPage() {
                         {r.standing.standing ? (
                           <StudentStatusBadge
                             standing={r.standing.standing}
-                            reason={r.standing.reason}
+                            reason={r.standing.reason ?? ""}
                           />
                         ) : (
                           <span className="text-xs text-muted-foreground">
@@ -320,19 +335,23 @@ export default function RankingsPage() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {pageRows.length === 0 && (
-                    <TableRow>
-                      <TableCell
-                        colSpan={6}
-                        className="py-10 text-center text-sm text-muted-foreground"
-                      >
-                        No students match your filters.
-                      </TableCell>
-                    </TableRow>
-                  )}
                 </TableBody>
               </Table>
-              <PaginationBar totalPage={totalPage} currentPage={page} />
+              {pageRows.length === 0 && (
+                <EntityEmptyState
+                  icon={Trophy}
+                  entityLabel="student"
+                  hasFilters={Boolean(searchParam) || classFilter !== "all"}
+                  onClearFilters={() => {
+                    setSearchInput("");
+                    router.replace("?");
+                  }}
+                  description="Finalized student grades will appear here when ranking data is available."
+                />
+              )}
+              {rankedFull.length > 0 && (
+                <PaginationBar totalPage={totalPage} currentPage={page} />
+              )}
             </div>
           </>
         )}

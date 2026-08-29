@@ -237,22 +237,6 @@ export interface GradeRecord {
   score: number;
 }
 
-export interface PaymentRow {
-  id: string;
-  studentId: string;
-  studentName: string;
-  studentNumber: string;
-  amount: number;
-  paymentMonth: string;
-  status: PaymentStatus;
-  paymentMethod: "bank" | "cash" | "telebirr" | "other";
-  submittedAt: string;
-  note?: string;
-}
-
-// lib/mock-data.ts
-// Replace the existing `PaymentRow` interface and `payments` export with these.
-
 export type PaymentStatus = "pending" | "approved" | "rejected";
 
 export interface PaymentRow {
@@ -264,6 +248,7 @@ export interface PaymentRow {
   className: string;
   amount: number;
   paymentMonth: string; // "YYYY-MM"
+  coveredMonths?: string[];
   status: PaymentStatus;
   paymentMethod: "bank" | "cash" | "telebirr" | "other";
   submittedAt: string; // "YYYY-MM-DD"
@@ -289,6 +274,7 @@ export const payments: PaymentRow[] = [
     className: "Grade 10 - A",
     amount: 2500,
     paymentMonth: "2026-08",
+    coveredMonths: ["2026-08", "2026-09", "2026-10", "2026-11"],
     status: "approved",
     paymentMethod: "telebirr",
     submittedAt: "2026-08-05",
@@ -371,18 +357,18 @@ export function getOverdueStudents(month: string = currentPaymentMonth) {
     const covered = payments.some(
       (p) =>
         p.studentId === student.id &&
-        p.paymentMonth === month &&
+        (p.coveredMonths?.includes(month) || p.paymentMonth === month) &&
         (p.status === "approved" || p.status === "pending"),
     );
     return !covered;
   });
 }
 
-/** Days overdue relative to the month's due date, using `asOf` as "today". */
-export function daysOverdue(
-  month: string,
-  asOf: Date = new Date("2026-08-28"),
-) {
+/**
+ * Days overdue relative to the month's due date. `asOf` defaults to "now" —
+ * only override it in tests.
+ */
+export function daysOverdue(month: string, asOf: Date = new Date()) {
   const [year, mon] = month.split("-").map(Number);
   const dueDate = new Date(year, mon - 1, paymentDueDay);
   const diff = Math.floor((asOf.getTime() - dueDate.getTime()) / 86_400_000);
@@ -804,6 +790,9 @@ export interface SubjectSubmission {
   classId: string;
   subjectName: string;
   teacher: string;
+  /** FK to TeacherRow.id — lets the "Remind" action resolve a real email
+   *  instead of matching on the display name string. */
+  teacherId: string;
   semester: string; // matches AcademicYearRow.semesters[].name
   status: GradeSubmissionStatus;
   submitted: number;
@@ -820,6 +809,7 @@ export const gradeSubmissions: SubjectSubmission[] = [
     classId: "c1",
     subjectName: "ICT",
     teacher: "Kalab Fikru",
+    teacherId: "t6",
     semester: "Semester 1",
     status: "complete",
     submitted: 36,
@@ -830,6 +820,7 @@ export const gradeSubmissions: SubjectSubmission[] = [
     classId: "c1",
     subjectName: "English",
     teacher: "Selam Girma",
+    teacherId: "t3",
     semester: "Semester 1",
     status: "complete",
     submitted: 36,
@@ -840,6 +831,7 @@ export const gradeSubmissions: SubjectSubmission[] = [
     classId: "c2",
     subjectName: "Physics",
     teacher: "Yonas Bekele",
+    teacherId: "t2",
     semester: "Semester 1",
     status: "complete",
     submitted: 34,
@@ -850,6 +842,7 @@ export const gradeSubmissions: SubjectSubmission[] = [
     classId: "c2",
     subjectName: "Chemistry",
     teacher: "Yonas Bekele",
+    teacherId: "t2",
     semester: "Semester 1",
     status: "not_started",
     submitted: 0,
@@ -860,6 +853,7 @@ export const gradeSubmissions: SubjectSubmission[] = [
     classId: "c3",
     subjectName: "English",
     teacher: "Selam Girma",
+    teacherId: "t3",
     semester: "Semester 1",
     status: "complete",
     submitted: 33,
@@ -870,6 +864,7 @@ export const gradeSubmissions: SubjectSubmission[] = [
     classId: "c3",
     subjectName: "Mathematics",
     teacher: "Meron Tesfaye",
+    teacherId: "t1",
     semester: "Semester 1",
     status: "complete",
     submitted: 33,
@@ -880,6 +875,7 @@ export const gradeSubmissions: SubjectSubmission[] = [
     classId: "c4",
     subjectName: "Biology",
     teacher: "Dawit Alemu",
+    teacherId: "t4",
     semester: "Semester 1",
     status: "complete",
     submitted: 31,
@@ -890,6 +886,7 @@ export const gradeSubmissions: SubjectSubmission[] = [
     classId: "c4",
     subjectName: "History",
     teacher: "Hana Worku",
+    teacherId: "t5",
     semester: "Semester 1",
     status: "in_progress",
     submitted: 22,
@@ -900,6 +897,7 @@ export const gradeSubmissions: SubjectSubmission[] = [
     classId: "c5",
     subjectName: "Mathematics",
     teacher: "Meron Tesfaye",
+    teacherId: "t1",
     semester: "Semester 1",
     status: "complete",
     submitted: 29,
@@ -912,6 +910,7 @@ export const gradeSubmissions: SubjectSubmission[] = [
     classId: "c1",
     subjectName: "ICT",
     teacher: "Kalab Fikru",
+    teacherId: "t6",
     semester: "Semester 2",
     status: "complete",
     submitted: 36,
@@ -922,6 +921,7 @@ export const gradeSubmissions: SubjectSubmission[] = [
     classId: "c1",
     subjectName: "English",
     teacher: "Selam Girma",
+    teacherId: "t3",
     semester: "Semester 2",
     status: "in_progress",
     submitted: 20,
@@ -932,6 +932,7 @@ export const gradeSubmissions: SubjectSubmission[] = [
     classId: "c2",
     subjectName: "Physics",
     teacher: "Yonas Bekele",
+    teacherId: "t2",
     semester: "Semester 2",
     status: "not_started",
     submitted: 0,
@@ -942,6 +943,7 @@ export const gradeSubmissions: SubjectSubmission[] = [
     classId: "c3",
     subjectName: "English",
     teacher: "Selam Girma",
+    teacherId: "t3",
     semester: "Semester 2",
     status: "complete",
     submitted: 33,
@@ -952,6 +954,7 @@ export const gradeSubmissions: SubjectSubmission[] = [
     classId: "c3",
     subjectName: "Mathematics",
     teacher: "Meron Tesfaye",
+    teacherId: "t1",
     semester: "Semester 2",
     status: "in_progress",
     submitted: 18,
@@ -962,6 +965,7 @@ export const gradeSubmissions: SubjectSubmission[] = [
     classId: "c4",
     subjectName: "Biology",
     teacher: "Dawit Alemu",
+    teacherId: "t4",
     semester: "Semester 2",
     status: "not_started",
     submitted: 0,
@@ -972,6 +976,7 @@ export const gradeSubmissions: SubjectSubmission[] = [
     classId: "c5",
     subjectName: "Mathematics",
     teacher: "Meron Tesfaye",
+    teacherId: "t1",
     semester: "Semester 2",
     status: "in_progress",
     submitted: 15,

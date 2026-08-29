@@ -20,13 +20,14 @@ import {
 import {
   classes,
   gradeSubmissions,
+  allTeachers,
   type GradeSubmissionStatus,
 } from "@/lib/mock-data";
 import {
   type Period,
   periodLabel,
   periodToSemesterNames,
-} from "@/utils/supabase/ranking-utils";
+} from "@/lib/ranking-utils";
 import { cn } from "@/lib/utils";
 
 const statusConfig: Record<
@@ -45,6 +46,14 @@ const statusConfig: Record<
     label: "Not started",
     className: "border-destructive text-destructive",
   },
+};
+
+// Not-started and in-progress rows are what an admin needs to act on —
+// surface those first instead of alphabetizing the status string.
+const statusPriority: Record<GradeSubmissionStatus, number> = {
+  not_started: 0,
+  in_progress: 1,
+  complete: 2,
 };
 
 export default function SubmissionsPage() {
@@ -69,10 +78,33 @@ export default function SubmissionsPage() {
             : g.classId,
         };
       })
-      .sort((a, b) => a.status.localeCompare(b.status));
+      .sort((a, b) => statusPriority[a.status] - statusPriority[b.status]);
   }, [period, search]);
 
   const pendingCount = rows.filter((r) => r.status !== "complete").length;
+
+  function remindTeacher(row: (typeof rows)[number]) {
+    const teacher = allTeachers.find((t) => t.id === row.teacherId);
+    if (!teacher) return;
+
+    const remaining = row.total - row.submitted;
+    const subject = encodeURIComponent(
+      `Reminder: ${row.subjectName} grades — ${row.className}`,
+    );
+    const body = encodeURIComponent(
+      `Hi ${teacher.profile.full_name},\n\n` +
+        `This is a reminder that ${remaining} of ${row.total} ${row.subjectName} grades ` +
+        `are still missing for ${row.className} (${periodLabel[period]}). ` +
+        `Rankings for this class can't be finalized until every subject is submitted.\n\n` +
+        `Thanks,\nAdmin Office`,
+    );
+
+    // Mock-data stage: opens the admin's own email client. Once backed by a
+    // real API, replace with a POST to a notifications endpoint instead.
+    const link = document.createElement("a");
+    link.href = `mailto:${teacher.profile.email}?subject=${subject}&body=${body}`;
+    link.click();
+  }
 
   return (
     <>
@@ -162,6 +194,7 @@ export default function SubmissionsPage() {
                       variant="ghost"
                       size="sm"
                       className="rounded-none text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => remindTeacher(r)}
                     >
                       <Mail className="size-3.5" />
                       Remind

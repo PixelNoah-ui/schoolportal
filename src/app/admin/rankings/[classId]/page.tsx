@@ -1,17 +1,32 @@
 // app/admin/rankings/[classId]/page.tsx
 "use client";
 
-import { use, useMemo, useState } from "react";
-import { notFound, useSearchParams } from "next/navigation";
+import {
+  Suspense,
+  use,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  notFound,
+  usePathname,
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Trophy } from "lucide-react";
 import { SiteHeader } from "@/components/admin/site-header";
 import { DataToolbar } from "@/components/admin/data-toolbar";
 import { GradeBadge } from "@/components/admin/grade-badge";
 import { RankIndicator } from "@/components/admin/rank-indicator";
 import { StudentStatusBadge } from "@/components/admin/rankings/student-status-badge";
-import { CompletionBanner } from "@/components/admin/rankings/completion-banner";
+import { TableSkeleton } from "@/components/admin/table-skeleton";
+import { EntityEmptyState } from "@/components/admin/entity-empty-state";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import PaginationBar from "@/components/PaginationBar";
+import { useRankings } from "@/hooks/use-rankings";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { buttonVariants } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -23,13 +38,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { rankingData, classes } from "@/lib/mock-data";
-import {
-  type Period,
-  periodLabel,
-  rankStudents,
-  getClassCompletion,
-} from "@/utils/supabase/ranking-utils";
+import { type Period, periodLabel, rankStudents } from "@/lib/ranking-utils";
+import type { RankingRow } from "@/lib/mock-data";
+
+const emptyRankingData: RankingRow[] = [];
+const emptyClasses: {
+  id: string;
+  name: string;
+  grade: number;
+  section: string;
+  studentCount: number;
+  teacher: string;
+}[] = [];
+const PAGE_SIZE = 10;
 
 function initials(name: string) {
   return name
@@ -39,19 +60,50 @@ function initials(name: string) {
     .join("");
 }
 
-export default function ClassRankingPage({
+// `useSearchParams()` requires a Suspense boundary around whatever reads it,
+// or Next.js bails the route out of static rendering at build time. The
+// `use(params)` call for the dynamic segment doesn't need this — only the
+// search-params hook does — so this is split into a thin wrapper + the
+// actual page body.
+export default function ClassRankingPageWrapper({
+  params,
+}: {
+  params: Promise<{ classId: string }>;
+}) {
+  return (
+    <Suspense fallback={null}>
+      <ClassRankingPage params={params} />
+    </Suspense>
+  );
+}
+
+function ClassRankingPage({
   params,
 }: {
   params: Promise<{ classId: string }>;
 }) {
   const { classId } = use(params);
-  const klass = classes.find((c) => c.id === classId);
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
-  const initialPeriod = (searchParams.get("period") as Period) ?? "sem1";
-
-  const [period, setPeriod] = useState<Period>(initialPeriod);
-  const [search, setSearch] = useState("");
-  const debouncedSearch = useDebouncedValue(search);
+  const searchParam = searchParams.get("search") ?? "";
+  const period =
+    searchParams.get("period") === "sem1" ||
+    searchParams.get("period") === "sem2" ||
+    searchParams.get("period") === "final"
+      ? (searchParams.get("period") as Period)
+      : "sem1";
+  const page = Math.max(1, Number(searchParams.get("page") ?? "1"));
+  const [searchInput, setSearchInput] = useState(searchParam);
+  const debouncedSearch = useDebouncedValue(searchInput);
+  const rankingsQuery = useRankings({
+    period,
+    classId,
+    search: debouncedSearch,
+  });
+  const rankingData = rankingsQuery.data?.rankingData ?? emptyRankingData;
+  const classes = rankingsQuery.data?.classes ?? emptyClasses;
+  const klass = classes.find((c) => c.id === classId);
 
   const ranked = useMemo(() => {
     if (!klass) return [];
@@ -63,11 +115,44 @@ export default function ClassRankingPage({
       ),
       period,
     );
-  }, [klass, period, debouncedSearch]);
+  }, [debouncedSearch, klass, period, rankingData]);
 
-  const completion = klass ? getClassCompletion(klass.id, period) : null;
+  const updateQuery = useCallback(
+    (key: string, value: string) => {
+      const next = new URLSearchParams(searchParams);
+      if (!value || (key === "period" && value === "sem1")) next.delete(key);
+      else next.set(key, value);
+      if (key !== "page") next.delete("page");
+      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
+
+  useEffect(() => {
+    if (debouncedSearch !== searchParam) updateQuery("search", debouncedSearch);
+  }, [debouncedSearch, searchParam, updateQuery]);
+
+  function handlePeriodChange(value: string) {
+    updateQuery("period", value as Period);
+  }
+
+  if (rankingsQuery.isLoading) {
+    return (
+      <>
+        <SiteHeader title="Rankings" />
+        <div className="flex flex-1 flex-col gap-6 p-6">
+          <Table>
+            <TableSkeleton rows={8} columns={5} />
+          </Table>
+        </div>
+      </>
+    );
+  }
 
   if (!klass) notFound();
+
+  const totalPage = Math.max(1, Math.ceil(ranked.length / PAGE_SIZE));
+  const pageRows = ranked.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <>
@@ -94,7 +179,7 @@ export default function ClassRankingPage({
               {klass.studentCount} students · Class teacher {klass.teacher}
             </p>
           </div>
-          <Tabs value={period} onValueChange={(v) => setPeriod(v as Period)}>
+          <Tabs value={period} onValueChange={handlePeriodChange}>
             <TabsList className="rounded-none">
               <TabsTrigger value="sem1" className="rounded-none">
                 Semester 1
@@ -109,26 +194,16 @@ export default function ClassRankingPage({
           </Tabs>
         </div>
 
-        {completion && (
-          <CompletionBanner
-            period={period}
-            percent={completion.percent}
-            pendingCount={completion.pending.length}
-          />
-        )}
-
-        {completion && completion.pending.length > 0 && (
-          <div className="border px-4 py-3 text-xs text-muted-foreground">
-            Waiting on:{" "}
-            {completion.pending
-              .map((p) => `${p.subjectName} (${p.teacher})`)
-              .join(", ")}
-          </div>
-        )}
+        <div className="border px-4 py-3 text-xs text-muted-foreground">
+          Rankings are calculated from finalized grades for{" "}
+          {periodLabel[period]}.
+        </div>
 
         <DataToolbar
-          searchValue={search}
-          onSearchChange={setSearch}
+          searchValue={searchInput}
+          onSearchChange={(value) => {
+            setSearchInput(value);
+          }}
           searchPlaceholder="Search by student name"
         />
 
@@ -143,7 +218,7 @@ export default function ClassRankingPage({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {ranked.map((r) => (
+            {pageRows.map((r) => (
               <TableRow
                 key={r.studentId}
                 className={
@@ -179,7 +254,7 @@ export default function ClassRankingPage({
                   {r.standing.standing ? (
                     <StudentStatusBadge
                       standing={r.standing.standing}
-                      reason={r.standing.reason}
+                      reason={r.standing.reason ?? ""}
                     />
                   ) : (
                     <span className="text-xs text-muted-foreground">—</span>
@@ -187,18 +262,27 @@ export default function ClassRankingPage({
                 </TableCell>
               </TableRow>
             ))}
-            {ranked.length === 0 && (
-              <TableRow>
-                <TableCell
-                  colSpan={5}
-                  className="py-10 text-center text-sm text-muted-foreground"
-                >
-                  No students match your search.
-                </TableCell>
-              </TableRow>
-            )}
           </TableBody>
         </Table>
+        {pageRows.length === 0 && (
+          <EntityEmptyState
+            icon={Trophy}
+            entityLabel="student"
+            hasFilters={Boolean(searchParam)}
+            onClearFilters={
+              Boolean(searchParam)
+                ? () => {
+                    setSearchInput("");
+                    router.replace(pathname);
+                  }
+                : undefined
+            }
+            description="Finalized student grades will appear here when ranking data is available."
+          />
+        )}
+        {pageRows.length > 0 && (
+          <PaginationBar totalPage={totalPage} currentPage={page} />
+        )}
       </div>
     </>
   );

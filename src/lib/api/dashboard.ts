@@ -246,19 +246,32 @@ export async function fetchDashboard(): Promise<DashboardData> {
     students: mappedStudents,
     classes: mappedClasses,
     subjects: mappedSubjects.sort((a, b) => b.avgScore - a.avgScore),
-    payments: payments.map((payment) => ({
-      id: payment.id,
-      studentId: payment.student_id,
-      studentName:
-        payment.students[0]?.profiles[0]?.full_name ?? "Unknown student",
-      studentNumber: "",
-      amount: Number(payment.amount),
-      paymentMonth: payment.payment_month,
-      status: payment.status,
-      paymentMethod: payment.payment_method ?? "other",
-      submittedAt: payment.submitted_at ?? "",
-      note: payment.note ?? undefined,
-    })),
+    payments: payments.map((payment) => {
+      const studentRecord = students.find(
+        (row) => row.id === payment.student_id,
+      );
+      const className = studentRecord?.classes[0]
+        ? `Grade ${studentRecord.classes[0].grade} - ${studentRecord.classes[0].section ?? ""}`
+        : "Unassigned";
+
+      return {
+        id: payment.id,
+        studentId: payment.student_id,
+        studentName:
+          payment.students[0]?.profiles[0]?.full_name ?? "Unknown student",
+        studentNumber: "",
+        classId: studentRecord?.class_id ?? "",
+        className,
+        amount: Number(payment.amount),
+        paymentMonth: payment.payment_month,
+        status: payment.status,
+        paymentMethod: payment.payment_method ?? "other",
+        submittedAt: payment.submitted_at ?? "",
+        screenshotUrl:
+          "https://placehold.co/500x900/e3f2fd/1565c0?text=Payment+Receipt",
+        note: payment.note ?? undefined,
+      };
+    }),
     stats: {
       totalStudents: students.length,
       totalTeachers: teachers.length,

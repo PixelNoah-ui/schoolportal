@@ -5,8 +5,6 @@ import {
   Users,
   BookOpen,
   Layers,
-  ClipboardList,
-  CalendarRange,
   Settings,
   Trophy,
   CreditCard,
@@ -26,14 +24,8 @@ export const adminNavMain: NavItem[] = [
   { title: "Teachers", url: "/admin/teachers", icon: Users },
   { title: "Classes", url: "/admin/classes", icon: Layers },
   { title: "Subjects", url: "/admin/subjects", icon: BookOpen },
-  { title: "Grades", url: "/admin/grades", icon: ClipboardList },
   { title: "Rankings", url: "/admin/rankings", icon: Trophy },
   { title: "Payments", url: "/admin/payments", icon: CreditCard },
-  {
-    title: "Academic Years",
-    url: "/admin/academic-years",
-    icon: CalendarRange,
-  },
 ];
 
 export const adminNavFooter: NavItem[] = [
