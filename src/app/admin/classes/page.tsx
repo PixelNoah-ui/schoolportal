@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus, School } from "lucide-react";
+import { Eye, Plus, School } from "lucide-react";
 import { SiteHeader } from "@/components/admin/site-header";
 import { PageHeader } from "@/components/admin/page-header";
 import { DataToolbar } from "@/components/admin/data-toolbar";
@@ -138,19 +139,31 @@ export default function ClassesPage() {
                     {classRow.studentCount}
                   </TableCell>
                   <TableCell>
-                    <RowActions
-                      entityName={`${classRow.name} - Grade ${classRow.grade}`}
-                      fields={classFields}
-                      values={{
-                        name: classRow.name,
-                        grade: String(classRow.grade),
-                        section: classRow.section,
-                      }}
-                      onEdit={(values) =>
-                        updateClass.mutate({ id: classRow.id, payload: values })
-                      }
-                      onDelete={() => deleteClass.mutate(classRow.id)}
-                    />
+                    <div className="flex items-center justify-end gap-2">
+                      <Link
+                        href={`/admin/classes/${classRow.id}`}
+                        className="inline-flex items-center gap-1 rounded-none border px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        <Eye className="size-3.5" />
+                        View
+                      </Link>
+                      <RowActions
+                        entityName={`${classRow.name} - Grade ${classRow.grade}`}
+                        fields={classFields}
+                        values={{
+                          name: classRow.name,
+                          grade: String(classRow.grade),
+                          section: classRow.section,
+                        }}
+                        onEdit={(values) =>
+                          updateClass.mutate({
+                            id: classRow.id,
+                            payload: values,
+                          })
+                        }
+                        onDelete={() => deleteClass.mutate(classRow.id)}
+                      />
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

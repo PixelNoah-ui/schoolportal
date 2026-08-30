@@ -19,7 +19,7 @@ type TeacherRecord = {
   temporary_password: string | null;
   created_at: string;
   profiles: Profile[];
-  class_subjects: { subjects: { name: string }[] }[];
+  class_subjects: { class_id: string; subjects: { name: string }[] }[];
 };
 
 function mapTeacher(teacher: TeacherRecord): TeacherRow {
@@ -27,12 +27,20 @@ function mapTeacher(teacher: TeacherRecord): TeacherRow {
   const subjects = teacher.class_subjects.flatMap((assignment) =>
     assignment.subjects.map((subject) => subject.name),
   );
+  const classIds = [
+    ...new Set(
+      teacher.class_subjects
+        .map((assignment) => assignment.class_id)
+        .filter(Boolean),
+    ),
+  ];
+
   return {
     id: teacher.id,
     teacher_number: "",
     profile,
     subjects: [...new Set(subjects)],
-    classCount: teacher.class_subjects.length,
+    classCount: classIds.length,
     phone: teacher.phone ?? "",
     temporaryPassword: teacher.temporary_password ?? undefined,
   };
@@ -49,7 +57,7 @@ export async function fetchTeachers({
   let request = supabase
     .from("teachers")
     .select(
-      "id, profile_id, phone, temporary_password, created_at, profiles!teachers_profile_id_fkey(id, full_name, username, email, role), class_subjects(subjects(name))",
+      "id, profile_id, phone, temporary_password, created_at, profiles!teachers_profile_id_fkey(id, full_name, username, email, role), class_subjects(class_id, subjects(name))",
       { count: "exact" },
     )
     .order("created_at", { ascending: false })

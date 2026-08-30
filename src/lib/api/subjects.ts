@@ -33,27 +33,40 @@ type SubjectRecord = {
 };
 
 function mapSubject(subject: SubjectRecord): SubjectRow {
-  const assignment = subject.class_subjects[0];
-  const classRow = assignment?.classes[0];
+  const classNames = [
+    ...new Set(
+      subject.class_subjects
+        .flatMap((row) =>
+          row.classes.map((classRow) =>
+            classRow
+              ? `Grade ${classRow.grade} - ${classRow.section ?? ""}`
+              : null,
+          ),
+        )
+        .filter(Boolean),
+    ),
+  ];
+  const teacherNames = [
+    ...new Set(
+      subject.class_subjects
+        .flatMap((row) =>
+          row.teachers.flatMap((teacherRow) =>
+            teacherRow.profiles.map((profile) => profile.full_name),
+          ),
+        )
+        .filter(Boolean),
+    ),
+  ];
   const scores = subject.class_subjects.flatMap((row) =>
     row.grades.map((grade) => Number(grade.score)),
   );
-  const teacher = subject.class_subjects
-    .flatMap((row) =>
-      row.teachers.flatMap((teacherRow) =>
-        teacherRow.profiles.map((profile) => profile.full_name),
-      ),
-    )
-    .find(Boolean);
 
   return {
     id: subject.id,
     name: subject.name,
-    classId: assignment?.class_id ?? "",
-    className: classRow
-      ? `Grade ${classRow.grade} - ${classRow.section ?? ""}`
-      : "All classes",
-    teacher: teacher ?? "Unassigned",
+    classId: subject.class_subjects[0]?.class_id ?? "",
+    className: classNames.length ? classNames.join(", ") : "All classes",
+    teacher: teacherNames.length ? teacherNames.join(", ") : "Unassigned",
     avgScore: scores.length
       ? scores.reduce((total, score) => total + score, 0) / scores.length
       : 0,

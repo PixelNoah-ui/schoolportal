@@ -35,13 +35,17 @@ type ClassRecord = {
 };
 
 function mapClass(classRow: ClassRecord): ClassRow {
-  const teacher = classRow.class_subjects
-    .flatMap((assignment) =>
-      assignment.teachers.flatMap((teacherRow) =>
-        teacherRow.profiles.map((profile) => profile.full_name),
-      ),
-    )
-    .find(Boolean);
+  const teacherNames = [
+    ...new Set(
+      classRow.class_subjects
+        .flatMap((assignment) =>
+          assignment.teachers.flatMap((teacherRow) =>
+            teacherRow.profiles.map((profile) => profile.full_name),
+          ),
+        )
+        .filter(Boolean),
+    ),
+  ];
 
   return {
     id: classRow.id,
@@ -49,7 +53,7 @@ function mapClass(classRow: ClassRecord): ClassRow {
     grade: classRow.grade,
     section: classRow.section ?? "",
     studentCount: classRow.students.length,
-    teacher: teacher ?? "Unassigned",
+    teacher: teacherNames.length ? teacherNames.join(", ") : "Unassigned",
   };
 }
 
