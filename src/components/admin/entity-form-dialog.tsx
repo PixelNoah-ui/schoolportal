@@ -108,10 +108,11 @@ export function EntityFormDialog({
               {isLoading ? (
                 <>
                   <Loader2 className="size-4 animate-spin" />
-                  {submitLabel ?? (mode === "add" ? "Creating..." : "Saving...")}
+                  {submitLabel ??
+                    (mode === "add" ? "Creating..." : "Saving...")}
                 </>
               ) : (
-                submitLabel ?? (mode === "add" ? "Create" : "Save changes")
+                (submitLabel ?? (mode === "add" ? "Create" : "Save changes"))
               )}
             </Button>
           </DialogFooter>

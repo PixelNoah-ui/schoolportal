@@ -21,8 +21,10 @@ export function useCreateAcademicYear() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (payload: Record<string, string>) => createAcademicYear(payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: academicYearsKey }),
+    mutationFn: (payload: Record<string, string>) =>
+      createAcademicYear(payload),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: academicYearsKey }),
   });
 }
 
@@ -30,9 +32,15 @@ export function useUpdateAcademicYear() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: Record<string, string> }) =>
-      updateAcademicYear(id, payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: academicYearsKey }),
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: string;
+      payload: Record<string, string>;
+    }) => updateAcademicYear(id, payload),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: academicYearsKey }),
   });
 }
 
@@ -41,7 +49,8 @@ export function useActivateAcademicYear() {
 
   return useMutation({
     mutationFn: (id: string) => activateAcademicYear(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: academicYearsKey }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: academicYearsKey }),
   });
 }
 
@@ -50,7 +59,8 @@ export function useCompleteAcademicYear() {
 
   return useMutation({
     mutationFn: (id: string) => completeAcademicYear(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: academicYearsKey }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: academicYearsKey }),
   });
 }
 
@@ -59,6 +69,7 @@ export function useDeleteAcademicYear() {
 
   return useMutation({
     mutationFn: (id: string) => deleteAcademicYear(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: academicYearsKey }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: academicYearsKey }),
   });
 }

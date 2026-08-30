@@ -10,7 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type SemesterRow = {
   id: string;
@@ -45,7 +51,9 @@ export default function SemestersPage() {
       if (selectedYear) {
         const { data } = await supabase
           .from("semesters")
-          .select("id, name, status, start_date, end_date, academic_years(name)")
+          .select(
+            "id, name, status, start_date, end_date, academic_years(name)",
+          )
           .eq("academic_year_id", selectedYear)
           .order("start_date", { ascending: true });
         setRows((data ?? []) as SemesterRow[]);
@@ -108,7 +116,9 @@ export default function SemestersPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {years.map((year) => (
-                      <SelectItem key={year.id} value={year.id}>{year.name}</SelectItem>
+                      <SelectItem key={year.id} value={year.id}>
+                        {year.name}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -154,7 +164,9 @@ export default function SemestersPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="grading_open">Grading open</SelectItem>
-                    <SelectItem value="grading_closed">Grading closed</SelectItem>
+                    <SelectItem value="grading_closed">
+                      Grading closed
+                    </SelectItem>
                     <SelectItem value="finalized">Finalized</SelectItem>
                   </SelectContent>
                 </Select>
@@ -162,7 +174,11 @@ export default function SemestersPage() {
             </div>
 
             <div className="flex items-end justify-end">
-              <Button className="rounded-none" onClick={handleCreate} disabled={!name.trim()}>
+              <Button
+                className="rounded-none"
+                onClick={handleCreate}
+                disabled={!name.trim()}
+              >
                 <Plus className="size-4" />
                 Add semester
               </Button>
@@ -180,7 +196,9 @@ export default function SemestersPage() {
               <div key={semester.id} className="rounded-none border p-4">
                 <div className="flex items-center justify-between gap-2">
                   <p className="font-medium">{semester.name}</p>
-                  <Badge className="rounded-none">{semester.status ?? "draft"}</Badge>
+                  <Badge className="rounded-none">
+                    {semester.status ?? "draft"}
+                  </Badge>
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">
                   {semester.start_date ?? "-"} → {semester.end_date ?? "-"}

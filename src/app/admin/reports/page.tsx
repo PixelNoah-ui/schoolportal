@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  GraduationCap,
-  TrendingUp,
-  Users,
-  WalletCards,
-} from "lucide-react";
+import { GraduationCap, TrendingUp, Users, WalletCards } from "lucide-react";
 import { PageHeader } from "@/components/admin/page-header";
 import { SiteHeader } from "@/components/admin/site-header";
 import { StatCard } from "@/components/admin/stat-card";
@@ -48,7 +43,9 @@ export default function ReportsPage() {
         <div className="flex flex-1 items-center justify-center p-6">
           <Card className="w-full max-w-md rounded-none shadow-none">
             <CardContent className="p-8 text-center">
-              <p className="text-sm font-semibold">Could not load report data</p>
+              <p className="text-sm font-semibold">
+                Could not load report data
+              </p>
               <p className="mt-2 text-sm text-muted-foreground">
                 {error instanceof Error
                   ? error.message
@@ -126,13 +123,20 @@ export default function ReportsPage() {
             </CardHeader>
             <CardContent className="space-y-3 p-4">
               {data.enrollmentByGrade.map((row) => (
-                <div key={row.grade} className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">{row.grade}</span>
+                <div
+                  key={row.grade}
+                  className="flex items-center justify-between"
+                >
+                  <span className="text-sm text-muted-foreground">
+                    {row.grade}
+                  </span>
                   <div className="flex items-center gap-3">
                     <div className="h-2 w-28 overflow-hidden border bg-muted/40">
                       <div
                         className="h-full bg-primary"
-                        style={{ width: `${Math.min((row.count / 250) * 100, 100)}%` }}
+                        style={{
+                          width: `${Math.min((row.count / 250) * 100, 100)}%`,
+                        }}
                       />
                     </div>
                     <span className="w-8 text-right text-sm font-medium tabular-nums">
@@ -180,7 +184,9 @@ export default function ReportsPage() {
             </CardHeader>
             <CardContent className="space-y-4 p-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Academic year</span>
+                <span className="text-sm text-muted-foreground">
+                  Academic year
+                </span>
                 <span className="text-sm font-medium">{data.academicYear}</span>
               </div>
               <div className="flex items-center justify-between">
@@ -215,7 +221,9 @@ export default function ReportsPage() {
               <TableBody>
                 {data.subjects.map((subject) => (
                   <TableRow key={subject.id}>
-                    <TableCell className="font-medium">{subject.name}</TableCell>
+                    <TableCell className="font-medium">
+                      {subject.name}
+                    </TableCell>
                     <TableCell>{subject.className}</TableCell>
                     <TableCell className="tabular-nums">
                       {subject.avgScore.toFixed(1)}%

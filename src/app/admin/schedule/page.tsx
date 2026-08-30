@@ -9,7 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type ScheduleRow = {
   id: string;
@@ -25,7 +31,9 @@ type ScheduleRow = {
 };
 
 export default function SchedulePage() {
-  const [courses, setCourses] = useState<Array<{ id: string; label: string }>>([]);
+  const [courses, setCourses] = useState<Array<{ id: string; label: string }>>(
+    [],
+  );
   const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
   const [selectedCourse, setSelectedCourse] = useState("");
   const [dayOfWeek, setDayOfWeek] = useState("Monday");
@@ -39,11 +47,15 @@ export default function SchedulePage() {
       const [{ data: courseData }, { data: scheduleData }] = await Promise.all([
         supabase
           .from("class_subjects")
-          .select("id, classes(name, grade, section), subjects(name), teachers(profiles(full_name))")
+          .select(
+            "id, classes(name, grade, section), subjects(name), teachers(profiles(full_name))",
+          )
           .order("created_at", { ascending: false }),
         supabase
           .from("schedules")
-          .select("id, day_of_week, start_time, end_time, room, class_subjects(classes(name, grade, section), subjects(name), teachers(profiles(full_name)))"),
+          .select(
+            "id, day_of_week, start_time, end_time, room, class_subjects(classes(name, grade, section), subjects(name), teachers(profiles(full_name)))",
+          ),
       ]);
       setCourses(
         (courseData ?? []).map((row) => ({
@@ -52,7 +64,8 @@ export default function SchedulePage() {
         })),
       );
       setSchedules((scheduleData ?? []) as ScheduleRow[]);
-      if (!selectedCourse && (courseData ?? []).length) setSelectedCourse((courseData ?? [])[0].id);
+      if (!selectedCourse && (courseData ?? []).length)
+        setSelectedCourse((courseData ?? [])[0].id);
     };
 
     void load();
@@ -71,7 +84,9 @@ export default function SchedulePage() {
     if (!error) {
       const { data } = await supabase
         .from("schedules")
-        .select("id, day_of_week, start_time, end_time, room, class_subjects(classes(name, grade, section), subjects(name), teachers(profiles(full_name)))");
+        .select(
+          "id, day_of_week, start_time, end_time, room, class_subjects(classes(name, grade, section), subjects(name), teachers(profiles(full_name)))",
+        );
       setSchedules((data ?? []) as ScheduleRow[]);
       setRoom("");
     }
@@ -104,7 +119,9 @@ export default function SchedulePage() {
                   </SelectTrigger>
                   <SelectContent>
                     {courses.map((course) => (
-                      <SelectItem key={course.id} value={course.id}>{course.label}</SelectItem>
+                      <SelectItem key={course.id} value={course.id}>
+                        {course.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -119,28 +136,57 @@ export default function SchedulePage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map((day) => (
-                      <SelectItem key={day} value={day}>{day}</SelectItem>
+                    {[
+                      "Monday",
+                      "Tuesday",
+                      "Wednesday",
+                      "Thursday",
+                      "Friday",
+                      "Saturday",
+                      "Sunday",
+                    ].map((day) => (
+                      <SelectItem key={day} value={day}>
+                        {day}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label>Room</Label>
-                <Input value={room} onChange={(event) => setRoom(event.target.value)} placeholder="Room A1" className="rounded-none" />
+                <Input
+                  value={room}
+                  onChange={(event) => setRoom(event.target.value)}
+                  placeholder="Room A1"
+                  className="rounded-none"
+                />
               </div>
               <div className="space-y-2">
                 <Label>Start time</Label>
-                <Input type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} className="rounded-none" />
+                <Input
+                  type="time"
+                  value={startTime}
+                  onChange={(event) => setStartTime(event.target.value)}
+                  className="rounded-none"
+                />
               </div>
               <div className="space-y-2">
                 <Label>End time</Label>
-                <Input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} className="rounded-none" />
+                <Input
+                  type="time"
+                  value={endTime}
+                  onChange={(event) => setEndTime(event.target.value)}
+                  className="rounded-none"
+                />
               </div>
             </div>
 
             <div className="flex items-end justify-end">
-              <Button className="rounded-none" onClick={handleCreate} disabled={!selectedCourse}>
+              <Button
+                className="rounded-none"
+                onClick={handleCreate}
+                disabled={!selectedCourse}
+              >
                 <Plus className="size-4" />
                 Save schedule
               </Button>
@@ -161,7 +207,8 @@ export default function SchedulePage() {
                   <CalendarClock className="size-4 text-muted-foreground" />
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  {slot.class_subjects?.[0]?.classes?.[0]?.name ?? "Class"} · {slot.class_subjects?.[0]?.subjects?.[0]?.name ?? "Subject"}
+                  {slot.class_subjects?.[0]?.classes?.[0]?.name ?? "Class"} ·{" "}
+                  {slot.class_subjects?.[0]?.subjects?.[0]?.name ?? "Subject"}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {slot.start_time} – {slot.end_time} · {slot.room ?? "No room"}

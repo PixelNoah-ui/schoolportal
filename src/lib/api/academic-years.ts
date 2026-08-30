@@ -105,9 +105,7 @@ export async function createAcademicYear(payload: Record<string, string>) {
   if (error) throw new Error(error.message);
 
   const academicYear = data as AcademicYearRecord;
-  const semestersInput = payload.semesters
-    ? JSON.parse(payload.semesters)
-    : [];
+  const semestersInput = payload.semesters ? JSON.parse(payload.semesters) : [];
 
   if (Array.isArray(semestersInput) && semestersInput.length > 0) {
     const rows = semestersInput.map((semester: Record<string, string>) => ({
@@ -144,7 +142,8 @@ export async function updateAcademicYear(
   validateAcademicYearDates(startDate, endDate);
 
   const nextStatus = payload.status || undefined;
-  const shouldActivate = payload.is_current === "true" || nextStatus === "active";
+  const shouldActivate =
+    payload.is_current === "true" || nextStatus === "active";
 
   if (shouldActivate) {
     const { data: activeYear, error: activeYearError } = await supabase

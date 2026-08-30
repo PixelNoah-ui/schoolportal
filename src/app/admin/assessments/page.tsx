@@ -25,7 +25,10 @@ export default function AssessmentsPage() {
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
-      const { data } = await supabase.from("assessment_types").select("id, name, description, is_active").order("name");
+      const { data } = await supabase
+        .from("assessment_types")
+        .select("id, name, description, is_active")
+        .order("name");
       setRows((data ?? []) as AssessmentTypeRow[]);
     };
 
@@ -37,7 +40,11 @@ export default function AssessmentsPage() {
     const supabase = createClient();
     const { data } = await supabase
       .from("assessment_types")
-      .insert({ name: name.trim(), description: description.trim() || null, is_active: true })
+      .insert({
+        name: name.trim(),
+        description: description.trim() || null,
+        is_active: true,
+      })
       .select("id, name, description, is_active")
       .single();
     if (data) {
@@ -62,14 +69,30 @@ export default function AssessmentsPage() {
           <CardContent className="grid gap-4 pt-6 md:grid-cols-[1fr_1fr_auto]">
             <div className="space-y-2">
               <Label htmlFor="assessment-name">Name</Label>
-              <Input id="assessment-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Quiz" className="rounded-none" />
+              <Input
+                id="assessment-name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Quiz"
+                className="rounded-none"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="assessment-description">Description</Label>
-              <Input id="assessment-description" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Short description" className="rounded-none" />
+              <Input
+                id="assessment-description"
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="Short description"
+                className="rounded-none"
+              />
             </div>
             <div className="flex items-end">
-              <Button className="rounded-none" onClick={handleCreate} disabled={!name.trim()}>
+              <Button
+                className="rounded-none"
+                onClick={handleCreate}
+                disabled={!name.trim()}
+              >
                 Save
               </Button>
             </div>
@@ -86,7 +109,9 @@ export default function AssessmentsPage() {
               <div key={row.id} className="rounded-none border p-4">
                 <div className="flex items-center justify-between gap-2">
                   <p className="font-medium">{row.name}</p>
-                  <Badge className="rounded-none">{row.is_active ? "Active" : "Inactive"}</Badge>
+                  <Badge className="rounded-none">
+                    {row.is_active ? "Active" : "Inactive"}
+                  </Badge>
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">
                   {row.description ?? "No description"}

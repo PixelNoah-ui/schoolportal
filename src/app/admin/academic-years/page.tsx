@@ -9,7 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useAcademicYears, useCreateAcademicYear } from "@/hooks/use-academic-years";
+import {
+  useAcademicYears,
+  useCreateAcademicYear,
+} from "@/hooks/use-academic-years";
 
 export default function AcademicYearsPage() {
   const { data = [], isLoading } = useAcademicYears();
@@ -145,7 +148,9 @@ export default function AcademicYearsPage() {
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-1">
-                    {year.isCurrent && <Badge className="rounded-none">Active</Badge>}
+                    {year.isCurrent && (
+                      <Badge className="rounded-none">Active</Badge>
+                    )}
                     {year.status === "completed" && (
                       <Badge variant="secondary" className="rounded-none">
                         Completed
@@ -156,7 +161,11 @@ export default function AcademicYearsPage() {
                 <div className="mt-3 flex flex-wrap gap-2">
                   {year.semesters.length > 0 ? (
                     year.semesters.map((semester) => (
-                      <Badge key={semester.id} variant="outline" className="rounded-none">
+                      <Badge
+                        key={semester.id}
+                        variant="outline"
+                        className="rounded-none"
+                      >
                         {semester.name}
                       </Badge>
                     ))

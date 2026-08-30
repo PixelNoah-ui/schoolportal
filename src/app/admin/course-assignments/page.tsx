@@ -8,7 +8,13 @@ import { PageHeader } from "@/components/admin/page-header";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type AssignmentRow = {
   id: string;
@@ -21,9 +27,15 @@ type AssignmentRow = {
 };
 
 export default function CourseAssignmentsPage() {
-  const [classes, setClasses] = useState<Array<{ id: string; name: string }>>([]);
-  const [subjects, setSubjects] = useState<Array<{ id: string; name: string }>>([]);
-  const [teachers, setTeachers] = useState<Array<{ id: string; full_name: string }>>([]);
+  const [classes, setClasses] = useState<Array<{ id: string; name: string }>>(
+    [],
+  );
+  const [subjects, setSubjects] = useState<Array<{ id: string; name: string }>>(
+    [],
+  );
+  const [teachers, setTeachers] = useState<
+    Array<{ id: string; full_name: string }>
+  >([]);
   const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedSubject, setSelectedSubject] = useState("");
@@ -32,19 +44,48 @@ export default function CourseAssignmentsPage() {
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
-      const [{ data: classesData }, { data: subjectData }, { data: teacherData }, { data: assignmentData }] = await Promise.all([
-        supabase.from("classes").select("id, name, grade, section").order("grade", { ascending: true }),
+      const [
+        { data: classesData },
+        { data: subjectData },
+        { data: teacherData },
+        { data: assignmentData },
+      ] = await Promise.all([
+        supabase
+          .from("classes")
+          .select("id, name, grade, section")
+          .order("grade", { ascending: true }),
         supabase.from("subjects").select("id, name").order("name"),
-        supabase.from("teachers").select("id, profiles(full_name)").order("created_at", { ascending: false }),
-        supabase.from("class_subjects").select("id, class_id, subject_id, teacher_id, classes(name, grade, section), subjects(name), teachers(profiles(full_name))"),
+        supabase
+          .from("teachers")
+          .select("id, profiles(full_name)")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("class_subjects")
+          .select(
+            "id, class_id, subject_id, teacher_id, classes(name, grade, section), subjects(name), teachers(profiles(full_name))",
+          ),
       ]);
 
-      setClasses((classesData ?? []).map((row) => ({ id: row.id, name: `Grade ${row.grade} - ${row.section ?? ""}` })));
-      setSubjects((subjectData ?? []).map((row) => ({ id: row.id, name: row.name })));
-      setTeachers((teacherData ?? []).map((row) => ({ id: row.id, full_name: row.profiles?.[0]?.full_name ?? "Unassigned" })));
+      setClasses(
+        (classesData ?? []).map((row) => ({
+          id: row.id,
+          name: `Grade ${row.grade} - ${row.section ?? ""}`,
+        })),
+      );
+      setSubjects(
+        (subjectData ?? []).map((row) => ({ id: row.id, name: row.name })),
+      );
+      setTeachers(
+        (teacherData ?? []).map((row) => ({
+          id: row.id,
+          full_name: row.profiles?.[0]?.full_name ?? "Unassigned",
+        })),
+      );
       setAssignments((assignmentData ?? []) as AssignmentRow[]);
-      if (!selectedClass && (classesData ?? []).length) setSelectedClass((classesData ?? [])[0].id);
-      if (!selectedSubject && (subjectData ?? []).length) setSelectedSubject((subjectData ?? [])[0].id);
+      if (!selectedClass && (classesData ?? []).length)
+        setSelectedClass((classesData ?? [])[0].id);
+      if (!selectedSubject && (subjectData ?? []).length)
+        setSelectedSubject((subjectData ?? [])[0].id);
     };
 
     void load();
@@ -59,7 +100,11 @@ export default function CourseAssignmentsPage() {
       teacher_id: selectedTeacher || null,
     });
     if (!error) {
-      const { data } = await supabase.from("class_subjects").select("id, class_id, subject_id, teacher_id, classes(name, grade, section), subjects(name), teachers(profiles(full_name))");
+      const { data } = await supabase
+        .from("class_subjects")
+        .select(
+          "id, class_id, subject_id, teacher_id, classes(name, grade, section), subjects(name), teachers(profiles(full_name))",
+        );
       setAssignments((data ?? []) as AssignmentRow[]);
     }
   };
@@ -69,7 +114,10 @@ export default function CourseAssignmentsPage() {
       <SiteHeader title="Course assignments" />
       <div className="flex flex-1 flex-col gap-5 p-6">
         <div className="flex items-center justify-between">
-          <PageHeader eyebrow="Teaching assignments" count={assignments.length} />
+          <PageHeader
+            eyebrow="Teaching assignments"
+            count={assignments.length}
+          />
         </div>
 
         <Card className="rounded-none shadow-none">
@@ -86,9 +134,15 @@ export default function CourseAssignmentsPage() {
                   value={selectedClass}
                   onValueChange={(value) => setSelectedClass(value ?? "")}
                 >
-                  <SelectTrigger className="w-full rounded-none"><SelectValue placeholder="Select class" /></SelectTrigger>
+                  <SelectTrigger className="w-full rounded-none">
+                    <SelectValue placeholder="Select class" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {classes.map((row) => <SelectItem key={row.id} value={row.id}>{row.name}</SelectItem>)}
+                    {classes.map((row) => (
+                      <SelectItem key={row.id} value={row.id}>
+                        {row.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -98,9 +152,15 @@ export default function CourseAssignmentsPage() {
                   value={selectedSubject}
                   onValueChange={(value) => setSelectedSubject(value ?? "")}
                 >
-                  <SelectTrigger className="w-full rounded-none"><SelectValue placeholder="Select subject" /></SelectTrigger>
+                  <SelectTrigger className="w-full rounded-none">
+                    <SelectValue placeholder="Select subject" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {subjects.map((row) => <SelectItem key={row.id} value={row.id}>{row.name}</SelectItem>)}
+                    {subjects.map((row) => (
+                      <SelectItem key={row.id} value={row.id}>
+                        {row.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -110,16 +170,26 @@ export default function CourseAssignmentsPage() {
                   value={selectedTeacher}
                   onValueChange={(value) => setSelectedTeacher(value ?? "")}
                 >
-                  <SelectTrigger className="w-full rounded-none"><SelectValue placeholder="Select teacher (optional)" /></SelectTrigger>
+                  <SelectTrigger className="w-full rounded-none">
+                    <SelectValue placeholder="Select teacher (optional)" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {teachers.map((row) => <SelectItem key={row.id} value={row.id}>{row.full_name}</SelectItem>)}
+                    {teachers.map((row) => (
+                      <SelectItem key={row.id} value={row.id}>
+                        {row.full_name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
             <div className="flex items-end justify-end">
-              <Button className="rounded-none" onClick={handleCreate} disabled={!selectedClass || !selectedSubject}>
+              <Button
+                className="rounded-none"
+                onClick={handleCreate}
+                disabled={!selectedClass || !selectedSubject}
+              >
                 <Plus className="size-4" />
                 Save assignment
               </Button>
@@ -136,14 +206,18 @@ export default function CourseAssignmentsPage() {
             assignments.map((assignment) => (
               <div key={assignment.id} className="rounded-none border p-4">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="font-medium">{assignment.classes?.[0]?.name ?? "Class"}</p>
+                  <p className="font-medium">
+                    {assignment.classes?.[0]?.name ?? "Class"}
+                  </p>
                   <BookOpen className="size-4 text-muted-foreground" />
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">
                   {assignment.subjects?.[0]?.name ?? "Subject"}
                 </p>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Teacher: {assignment.teachers?.[0]?.profiles?.[0]?.full_name ?? "Unassigned"}
+                  Teacher:{" "}
+                  {assignment.teachers?.[0]?.profiles?.[0]?.full_name ??
+                    "Unassigned"}
                 </p>
               </div>
             ))

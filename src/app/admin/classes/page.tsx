@@ -92,7 +92,7 @@ export default function ClassesPage() {
 
   const activeAcademicYearId =
     yearFilter === "all"
-      ? academicYears.find((year) => year.isCurrent)?.id ?? ""
+      ? (academicYears.find((year) => year.isCurrent)?.id ?? "")
       : yearFilter;
 
   return (
