@@ -13,10 +13,12 @@ create table if not exists public.profiles (
 
 create table if not exists public.classes (
   id uuid primary key default gen_random_uuid(),
+  academic_year_id uuid,
   name text not null,
   grade integer not null,
   section text,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  constraint classes_academic_year_id_fkey foreign key (academic_year_id) references public.academic_years (id)
 );
 
 create table if not exists public.students (
@@ -47,6 +49,7 @@ create table if not exists public.academic_years (
   start_date date,
   end_date date,
   is_current boolean not null default false,
+  status text not null default 'draft',
   created_at timestamptz not null default now()
 );
 

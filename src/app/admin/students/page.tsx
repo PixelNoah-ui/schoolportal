@@ -106,7 +106,8 @@ export default function StudentsPage() {
             fields={studentFields}
             open={addOpen}
             onOpenChange={setAddOpen}
-            onSubmit={(values) => createStudent.mutate(values)}
+            onSubmit={(values) => createStudent.mutateAsync(values)}
+            isLoading={createStudent.isPending}
             trigger={
               <Button className="rounded-none">
                 <Plus className="size-4" /> Add Student
@@ -197,9 +198,11 @@ export default function StudentsPage() {
                         dob: s.dob,
                       }}
                       onEdit={(values) =>
-                        updateStudent.mutate({ id: s.id, payload: values })
+                        updateStudent.mutateAsync({ id: s.id, payload: values })
                       }
-                      onDelete={() => deleteStudent.mutate(s.id)}
+                      onDelete={() => deleteStudent.mutateAsync(s.id)}
+                      editIsLoading={updateStudent.isPending}
+                      deleteIsLoading={deleteStudent.isPending}
                     />
                   </TableCell>
                 </TableRow>

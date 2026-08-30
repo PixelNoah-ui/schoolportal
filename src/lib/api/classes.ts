@@ -2,6 +2,8 @@ import { createClient } from "@/utils/supabase/client";
 
 export interface ClassRow {
   id: string;
+  academicYearId?: string | null;
+  academicYearName?: string;
   name: string;
   grade: number;
   section: string;
@@ -11,6 +13,7 @@ export interface ClassRow {
 
 export interface ClassListParams {
   search?: string;
+  academicYearId?: string;
   page?: number;
   pageSize?: number;
 }
@@ -24,6 +27,8 @@ export type ClassOption = Pick<ClassRow, "id" | "name" | "grade" | "section">;
 
 type ClassRecord = {
   id: string;
+  academic_year_id: string | null;
+  academic_years?: { id: string; name: string }[];
   name: string;
   grade: number;
   section: string | null;
@@ -49,6 +54,9 @@ function mapClass(classRow: ClassRecord): ClassRow {
 
   return {
     id: classRow.id,
+    academicYearId: classRow.academic_year_id,
+    academicYearName:
+      classRow.academic_years?.[0]?.name ?? undefined,
     name: classRow.name,
     grade: classRow.grade,
     section: classRow.section ?? "",
@@ -59,6 +67,7 @@ function mapClass(classRow: ClassRecord): ClassRow {
 
 export async function fetchClasses({
   search = "",
+  academicYearId,
   page = 1,
   pageSize = 10,
 }: ClassListParams = {}): Promise<ClassListResult> {
@@ -68,12 +77,16 @@ export async function fetchClasses({
   let request = supabase
     .from("classes")
     .select(
-      "id, name, grade, section, created_at, students(id), class_subjects(teachers(profiles(full_name)))",
+      "id, academic_year_id, academic_years!classes_academic_year_id_fkey(id, name), name, grade, section, created_at, students(id), class_subjects(teachers(profiles(full_name)))",
       { count: "exact" },
     )
     .order("grade", { ascending: true })
     .order("section", { ascending: true })
     .range(from, to);
+
+  if (academicYearId && academicYearId !== "all") {
+    request = request.eq("academic_year_id", academicYearId);
+  }
 
   if (search.trim()) {
     const term = search.trim();
@@ -92,7 +105,7 @@ export async function fetchClassOptions(): Promise<ClassOption[]> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("classes")
-    .select("id, name, grade, section")
+    .select("id, academic_year_id, name, grade, section")
     .order("grade", { ascending: true })
     .order("section", { ascending: true });
   if (error) throw new Error(error.message);
@@ -110,12 +123,13 @@ export async function createClass(payload: Record<string, string>) {
   const { data, error } = await supabase
     .from("classes")
     .insert({
+      academic_year_id: payload.academic_year_id || null,
       name: payload.name?.trim() || `Class ${section}`,
       grade: Number(payload.grade),
       section: section || null,
     })
     .select(
-      "id, name, grade, section, created_at, students(id), class_subjects(teachers(profiles(full_name)))",
+      "id, academic_year_id, academic_years!classes_academic_year_id_fkey(id, name), name, grade, section, created_at, students(id), class_subjects(teachers(profiles(full_name)))",
     )
     .single();
   if (error) throw new Error(error.message);
@@ -128,6 +142,7 @@ export async function updateClass(id: string, payload: Record<string, string>) {
   const { error } = await supabase
     .from("classes")
     .update({
+      academic_year_id: payload.academic_year_id || null,
       name: payload.name?.trim() || `Class ${section}`,
       grade: Number(payload.grade),
       section: section || null,

@@ -17,8 +17,10 @@ interface RowActionsProps {
   entityName?: string;
   fields?: FieldConfig[];
   values?: Record<string, string>;
-  onEdit?: (values: Record<string, string>) => void;
-  onDelete?: () => void;
+  onEdit?: (values: Record<string, string>) => Promise<unknown> | unknown;
+  onDelete?: () => Promise<unknown> | unknown;
+  editIsLoading?: boolean;
+  deleteIsLoading?: boolean;
 }
 
 export function RowActions({
@@ -27,6 +29,8 @@ export function RowActions({
   values,
   onEdit,
   onDelete,
+  editIsLoading = false,
+  deleteIsLoading = false,
 }: RowActionsProps) {
   const [viewOpen, setViewOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -92,12 +96,15 @@ export function RowActions({
             onSubmit={onEdit}
             open={editOpen}
             onOpenChange={setEditOpen}
+            isLoading={editIsLoading}
+            submitLabel="Save changes"
           />
           <ConfirmDeleteDialog
             name={entityName}
             onConfirm={onDelete}
             open={deleteOpen}
             onOpenChange={setDeleteOpen}
+            isLoading={deleteIsLoading}
           />
         </>
       )}

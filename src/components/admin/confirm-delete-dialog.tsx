@@ -13,7 +13,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import type { ReactElement } from "react";
 
 export function ConfirmDeleteDialog({
@@ -22,13 +22,21 @@ export function ConfirmDeleteDialog({
   trigger,
   open,
   onOpenChange,
+  isLoading = false,
 }: {
   name: string;
-  onConfirm: () => void;
+  onConfirm: () => Promise<unknown> | unknown;
   trigger?: ReactElement;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  isLoading?: boolean;
 }) {
+  async function handleConfirm() {
+    if (isLoading) return;
+    await Promise.resolve(onConfirm());
+    onOpenChange?.(false);
+  }
+
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       {trigger ? (
@@ -57,10 +65,18 @@ export function ConfirmDeleteDialog({
         <AlertDialogFooter>
           <AlertDialogCancel className="rounded-none">Cancel</AlertDialogCancel>
           <AlertDialogAction
-            onClick={onConfirm}
+            onClick={handleConfirm}
             className="rounded-none bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            disabled={isLoading}
           >
-            Delete
+            {isLoading ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Deleting...
+              </>
+            ) : (
+              "Delete"
+            )}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

@@ -103,7 +103,8 @@ export default function TeachersPage() {
             fields={teacherFields}
             open={addOpen}
             onOpenChange={setAddOpen}
-            onSubmit={(values) => createTeacher.mutate(values)}
+            onSubmit={(values) => createTeacher.mutateAsync(values)}
+            isLoading={createTeacher.isPending}
             trigger={
               <Button className="rounded-none">
                 <Plus className="size-4" /> Add Teacher
@@ -189,9 +190,11 @@ export default function TeachersPage() {
                         phone: t.phone,
                       }}
                       onEdit={(values) =>
-                        updateTeacher.mutate({ id: t.id, payload: values })
+                        updateTeacher.mutateAsync({ id: t.id, payload: values })
                       }
-                      onDelete={() => deleteTeacher.mutate(t.id)}
+                      onDelete={() => deleteTeacher.mutateAsync(t.id)}
+                      editIsLoading={updateTeacher.isPending}
+                      deleteIsLoading={deleteTeacher.isPending}
                     />
                   </TableCell>
                 </TableRow>

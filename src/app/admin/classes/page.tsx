@@ -15,6 +15,13 @@ import {
 import { TableSkeleton } from "@/components/admin/table-skeleton";
 import { EntityEmptyState } from "@/components/admin/entity-empty-state";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import PaginationBar from "@/components/PaginationBar";
 import {
   Table,
@@ -30,6 +37,7 @@ import {
   useUpdateClass,
   useDeleteClass,
 } from "@/hooks/use-classes";
+import { useAcademicYears } from "@/hooks/use-academic-years";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 
 const classFields: FieldConfig[] = [
@@ -42,27 +50,30 @@ export default function ClassesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const search = searchParams.get("search") ?? "";
+  const yearFilter = searchParams.get("year") ?? "all";
   const [searchInput, setSearchInput] = useState(search);
   const debouncedSearch = useDebouncedValue(searchInput);
   const currentPage = Math.max(1, Number(searchParams.get("page") ?? "1"));
   const [addOpen, setAddOpen] = useState(false);
 
+  const { data: academicYears = [] } = useAcademicYears();
   const { data, isLoading } = useClasses({
     search: debouncedSearch,
+    academicYearId: yearFilter,
     page: currentPage,
   });
   const createClass = useCreateClass();
   const updateClass = useUpdateClass();
   const deleteClass = useDeleteClass();
 
-  const hasFilters = Boolean(search);
+  const hasFilters = Boolean(search) || yearFilter !== "all";
   const isEmpty = !isLoading && (data?.classes.length ?? 0) === 0;
 
   const updateQuery = useCallback(
-    (value: string) => {
+    (key: string, value: string) => {
       const next = new URLSearchParams(searchParams);
-      if (value) next.set("search", value);
-      else next.delete("search");
+      if (!value || value === "all") next.delete(key);
+      else next.set(key, value);
       next.delete("page");
       router.replace(`?${next.toString()}`);
     },
@@ -71,13 +82,18 @@ export default function ClassesPage() {
 
   useEffect(() => {
     if (debouncedSearch === search) return;
-    updateQuery(debouncedSearch);
+    updateQuery("search", debouncedSearch);
   }, [debouncedSearch, search, updateQuery]);
 
   function clearFilters() {
     setSearchInput("");
     router.replace("?");
   }
+
+  const activeAcademicYearId =
+    yearFilter === "all"
+      ? academicYears.find((year) => year.isCurrent)?.id ?? ""
+      : yearFilter;
 
   return (
     <>
@@ -92,7 +108,13 @@ export default function ClassesPage() {
             fields={classFields}
             open={addOpen}
             onOpenChange={setAddOpen}
-            onSubmit={(values) => createClass.mutate(values)}
+            onSubmit={(values) =>
+              createClass.mutateAsync({
+                ...values,
+                academic_year_id: activeAcademicYearId || "",
+              })
+            }
+            isLoading={createClass.isPending}
             trigger={
               <Button className="rounded-none">
                 <Plus className="size-4" /> Add Class
@@ -101,11 +123,30 @@ export default function ClassesPage() {
           />
         </div>
 
-        <DataToolbar
-          searchValue={searchInput}
-          onSearchChange={setSearchInput}
-          searchPlaceholder="Search by class or section"
-        />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <DataToolbar
+            searchValue={searchInput}
+            onSearchChange={setSearchInput}
+            searchPlaceholder="Search by class or section"
+          />
+          <Select
+            value={yearFilter}
+            onValueChange={(value) => updateQuery("year", value ?? "all")}
+          >
+            <SelectTrigger className="w-full rounded-none sm:w-52">
+              <SelectValue placeholder="Academic year" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All academic years</SelectItem>
+              {academicYears.map((year) => (
+                <SelectItem key={year.id} value={year.id}>
+                  {year.name}
+                  {year.isCurrent ? " (Current)" : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         <Table>
           <TableHeader>
@@ -158,7 +199,10 @@ export default function ClassesPage() {
                         onEdit={(values) =>
                           updateClass.mutate({
                             id: classRow.id,
-                            payload: values,
+                            payload: {
+                              ...values,
+                              academic_year_id: activeAcademicYearId || "",
+                            },
                           })
                         }
                         onDelete={() => deleteClass.mutate(classRow.id)}

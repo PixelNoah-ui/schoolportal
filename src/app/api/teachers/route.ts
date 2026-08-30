@@ -96,22 +96,28 @@ export async function POST(request: Request) {
   const { data: teacher, error: teacherError } = await admin
     .from("teachers")
     .insert({
+      id: crypto.randomUUID(),
       profile_id: authData.user.id,
       phone: body.phone || null,
       temporary_password: temporaryPassword,
     })
-    .select(
-      "id, profile_id, phone, temporary_password, created_at, profiles!teachers_profile_id_fkey(id, full_name, username, email, role), class_subjects(subjects(name))",
-    )
+    .select("id, profile_id, phone, temporary_password, created_at")
     .single();
   if (teacherError) {
     await admin.auth.admin.deleteUser(authData.user.id);
     return NextResponse.json({ error: teacherError.message }, { status: 400 });
   }
+
   return NextResponse.json({
     id: teacher.id,
     teacher_number: "",
-    profile: teacher.profiles[0],
+    profile: {
+      id: authData.user.id,
+      full_name: fullName,
+      username,
+      email,
+      role: "teacher",
+    },
     subjects: [],
     classCount: 0,
     phone: teacher.phone ?? "",

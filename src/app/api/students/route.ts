@@ -96,28 +96,33 @@ export async function POST(request: Request) {
   const { data: student, error: studentError } = await admin
     .from("students")
     .insert({
+      id: crypto.randomUUID(),
       profile_id: authData.user.id,
       phone: body.phone || null,
       date_of_birth: body.dob || null,
       temporary_password: temporaryPassword,
     })
-    .select(
-      "id, profile_id, phone, date_of_birth, temporary_password, created_at, profiles!students_profile_id_fkey(id, full_name, username, email, role), classes(id, grade, section)",
-    )
+    .select("id, profile_id, phone, date_of_birth, temporary_password, created_at")
     .single();
   if (studentError) {
     await admin.auth.admin.deleteUser(authData.user.id);
     return NextResponse.json({ error: studentError.message }, { status: 400 });
   }
   return NextResponse.json({
-    ...student,
+    id: student.id,
     student_number: "",
     className: "Unassigned",
     avgScore: 0,
     joined: "just now",
     dob: body.dob ?? "",
     classId: "",
-    profile: student.profiles[0],
+    profile: {
+      id: authData.user.id,
+      full_name: fullName,
+      username,
+      email,
+      role: "student",
+    },
     temporaryPassword,
   });
 }

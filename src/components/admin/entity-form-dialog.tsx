@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from "react";
+import { Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -27,10 +28,12 @@ interface EntityFormDialogProps {
   description?: string;
   fields?: FieldConfig[];
   initialValues?: Record<string, string>;
-  onSubmit: (values: Record<string, string>) => void;
+  onSubmit: (values: Record<string, string>) => Promise<unknown> | unknown;
   trigger?: React.ReactElement;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  isLoading?: boolean;
+  submitLabel?: string;
 }
 
 export function EntityFormDialog({
@@ -43,6 +46,8 @@ export function EntityFormDialog({
   trigger,
   open: controlledOpen,
   onOpenChange,
+  isLoading = false,
+  submitLabel,
 }: EntityFormDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
@@ -54,8 +59,9 @@ export function EntityFormDialog({
   );
   const readOnly = mode === "view";
 
-  function handleSubmit() {
-    onSubmit(values);
+  async function handleSubmit() {
+    if (isLoading) return;
+    await Promise.resolve(onSubmit(values));
     setOpen(false);
   }
 
@@ -90,11 +96,23 @@ export function EntityFormDialog({
               variant="outline"
               className="rounded-none"
               onClick={() => setOpen(false)}
+              disabled={isLoading}
             >
               Cancel
             </Button>
-            <Button className="rounded-none" onClick={handleSubmit}>
-              {mode === "add" ? "Create" : "Save changes"}
+            <Button
+              className="rounded-none"
+              onClick={handleSubmit}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  {submitLabel ?? (mode === "add" ? "Creating..." : "Saving...")}
+                </>
+              ) : (
+                submitLabel ?? (mode === "add" ? "Create" : "Save changes")
+              )}
             </Button>
           </DialogFooter>
         )}

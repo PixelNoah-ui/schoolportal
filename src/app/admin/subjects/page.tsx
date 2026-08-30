@@ -92,7 +92,8 @@ export default function SubjectsPage() {
             fields={subjectFields}
             open={addOpen}
             onOpenChange={setAddOpen}
-            onSubmit={(values) => createSubject.mutate(values)}
+            onSubmit={(values) => createSubject.mutateAsync(values)}
+            isLoading={createSubject.isPending}
             trigger={
               <Button className="rounded-none">
                 <Plus className="size-4" /> Add Subject
@@ -154,12 +155,14 @@ export default function SubjectsPage() {
                       fields={subjectFields}
                       values={{ name: subject.name }}
                       onEdit={(values) =>
-                        updateSubject.mutate({
+                        updateSubject.mutateAsync({
                           id: subject.id,
                           payload: values,
                         })
                       }
-                      onDelete={() => deleteSubject.mutate(subject.id)}
+                      onDelete={() => deleteSubject.mutateAsync(subject.id)}
+                      editIsLoading={updateSubject.isPending}
+                      deleteIsLoading={deleteSubject.isPending}
                     />
                   </TableCell>
                 </TableRow>
