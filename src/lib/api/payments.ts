@@ -12,9 +12,8 @@ type PaymentRecord = {
   reviewed_at: string | null;
   rejection_reason: string | null;
   note: string | null;
-  screenshot_url: string | null;
+  proof_path: string | null;
   students: {
-    student_number: string | null;
     class_id: string | null;
     profiles: { full_name: string }[];
     classes: { name: string; grade: number; section: string | null }[];
@@ -24,7 +23,7 @@ type PaymentRecord = {
 
 export type PaymentStudent = {
   id: string;
-  student_number: string | null;
+  student_number?: string | null;
   class_id: string | null;
   full_name: string;
   className: string;
@@ -35,7 +34,26 @@ export type PaymentStudent = {
   }[];
 };
 
-function mapPayment(payment: PaymentRecord): PaymentRow {
+async function resolveProofUrl(proofPath: string | null) {
+  if (!proofPath) {
+    return "https://placehold.co/500x900/e3f2fd/1565c0?text=Payment+Receipt";
+  }
+
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase.storage
+      .from("payment-proofs")
+      .createSignedUrl(proofPath, 300);
+    if (error || !data?.signedUrl) {
+      return proofPath;
+    }
+    return data.signedUrl;
+  } catch {
+    return proofPath;
+  }
+}
+
+async function mapPayment(payment: PaymentRecord): Promise<PaymentRow> {
   const student = payment.students[0];
   const classRow = student?.classes[0];
   const coveredMonths = payment.payment_month_allocations
@@ -46,7 +64,7 @@ function mapPayment(payment: PaymentRecord): PaymentRow {
     id: payment.id,
     studentId: payment.student_id,
     studentName: student?.profiles[0]?.full_name ?? "Unknown student",
-    studentNumber: student?.student_number ?? "",
+    studentNumber: "",
     classId: student?.class_id ?? "",
     className: classRow
       ? `Grade ${classRow.grade} - ${classRow.section ?? ""}`
@@ -57,9 +75,7 @@ function mapPayment(payment: PaymentRecord): PaymentRow {
     status: payment.status,
     paymentMethod: payment.payment_method ?? "other",
     submittedAt: payment.submitted_at ?? "",
-    screenshotUrl:
-      payment.screenshot_url ??
-      "https://placehold.co/500x900/e3f2fd/1565c0?text=Payment+Receipt",
+    screenshotUrl: await resolveProofUrl(payment.proof_path),
     reviewedAt: payment.reviewed_at ?? undefined,
     rejectionReason: payment.rejection_reason ?? undefined,
     note: payment.note ?? undefined,
@@ -93,7 +109,7 @@ export async function fetchPayments({
   let request = supabase
     .from("payments")
     .select(
-      "id, student_id, amount, payment_month, status, payment_method, submitted_at, reviewed_at, rejection_reason, note, screenshot_url, students(student_number, class_id, profiles(full_name), classes(name, grade, section)), payment_month_allocations(payment_month)",
+      "id, student_id, amount, payment_month, status, payment_method, submitted_at, reviewed_at, rejection_reason, note, proof_path, students(class_id, profiles(full_name), classes(name, grade, section)), payment_month_allocations(payment_month)",
       { count: "exact" },
     )
     .order("submitted_at", { ascending: false });
@@ -114,17 +130,19 @@ export async function fetchPayments({
   if (classId !== "all") request = request.eq("students.class_id", classId);
   if (status !== "all") request = request.eq("status", status);
   if (search.trim()) {
-    request = request.or(
-      `full_name.ilike.%${search.trim()}%,student_number.ilike.%${search.trim()}%`,
-      { foreignTable: "students" },
-    );
+    request = request.or(`full_name.ilike.%${search.trim()}%`, {
+      foreignTable: "students",
+    });
   }
 
   const from = Math.max(0, page - 1) * pageSize;
   const { data, error, count } = await request.range(from, from + pageSize - 1);
   if (error) throw new Error(error.message);
+  const payments = (data as PaymentRecord[] | null) ?? [];
+  const mappedPayments = await Promise.all(payments.map(mapPayment));
+
   return {
-    payments: (data as PaymentRecord[] | null)?.map(mapPayment) ?? [],
+    payments: mappedPayments,
     total: count ?? 0,
     totalPages: Math.max(1, Math.ceil((count ?? 0) / pageSize)),
   };
@@ -141,13 +159,12 @@ export async function fetchPaymentStudents(): Promise<PaymentStudent[]> {
   const { data, error } = await supabase
     .from("students")
     .select(
-      "id, student_number, class_id, profiles(full_name), classes(name, grade, section), payments(payment_month, status, payment_month_allocations(payment_month))",
+      "id, class_id, profiles(full_name), classes(name, grade, section), payments(payment_month, status, payment_month_allocations(payment_month))",
     );
   if (error) throw new Error(error.message);
   return (data ?? []).map((row) => {
     const student = row as {
       id: string;
-      student_number: string | null;
       class_id: string | null;
       profiles: { full_name: string }[];
       classes: { name: string; grade: number; section: string | null }[];
@@ -160,7 +177,7 @@ export async function fetchPaymentStudents(): Promise<PaymentStudent[]> {
     const classRow = student.classes[0];
     return {
       id: student.id,
-      student_number: student.student_number,
+      student_number: undefined,
       class_id: student.class_id,
       full_name: student.profiles[0]?.full_name ?? "Unknown student",
       className: classRow

@@ -66,10 +66,11 @@ export function PaymentReviewDialog({
             >
               <Image
                 src={payment.screenshotUrl}
-                alt="Payment proof screenshot"
-                fill
-                sizes="220px"
-                className="object-cover"
+                alt="Payment proof"
+                width={600}
+                height={800}
+                unoptimized
+                className="h-56 w-full object-cover"
               />
               <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/40 group-hover:opacity-100">
                 <ExternalLink className="size-5 text-white" />

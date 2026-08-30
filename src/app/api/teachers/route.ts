@@ -80,15 +80,19 @@ export async function POST(request: Request) {
       { status: 400 },
     );
 
-  const { error: profileError } = await admin
-    .from("profiles")
-    .insert({
-      id: authData.user.id,
-      full_name: fullName,
-      username,
-      email,
-      role: "teacher",
-    });
+  const { error: profileError } = await admin.from("profiles").insert({
+    id: authData.user.id,
+    full_name: fullName,
+    username,
+    email,
+    role: "teacher",
+  });
+
+  if (profileError) {
+    await admin.auth.admin.deleteUser(authData.user.id);
+    return NextResponse.json({ error: profileError.message }, { status: 400 });
+  }
+
   const { data: teacher, error: teacherError } = await admin
     .from("teachers")
     .insert({
@@ -100,12 +104,9 @@ export async function POST(request: Request) {
       "id, profile_id, phone, temporary_password, created_at, profiles!teachers_profile_id_fkey(id, full_name, username, email, role), class_subjects(subjects(name))",
     )
     .single();
-  if (profileError || teacherError) {
+  if (teacherError) {
     await admin.auth.admin.deleteUser(authData.user.id);
-    return NextResponse.json(
-      { error: profileError?.message ?? teacherError?.message },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: teacherError.message }, { status: 400 });
   }
   return NextResponse.json({
     id: teacher.id,
