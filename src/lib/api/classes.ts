@@ -55,8 +55,7 @@ function mapClass(classRow: ClassRecord): ClassRow {
   return {
     id: classRow.id,
     academicYearId: classRow.academic_year_id,
-    academicYearName:
-      classRow.academic_years?.[0]?.name ?? undefined,
+    academicYearName: classRow.academic_years?.[0]?.name ?? undefined,
     name: classRow.name,
     grade: classRow.grade,
     section: classRow.section ?? "",

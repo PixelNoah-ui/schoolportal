@@ -26,7 +26,8 @@ export default function SettingsPage() {
   const [semesters, setSemesters] = useState("Semester 1,Semester 2");
 
   const academicYears = data ?? [];
-  const currentYear = academicYears.find((year) => year.isCurrent) ?? academicYears[0];
+  const currentYear =
+    academicYears.find((year) => year.isCurrent) ?? academicYears[0];
 
   function handleCreateYear() {
     if (!name.trim()) return;
@@ -218,7 +219,10 @@ export default function SettingsPage() {
             </div>
             <div className="space-y-2">
               <Label>Email</Label>
-              <Input defaultValue="admin@schoolportal.com" className="rounded-none" />
+              <Input
+                defaultValue="admin@schoolportal.com"
+                className="rounded-none"
+              />
             </div>
             <div className="space-y-2">
               <Label>Phone</Label>
