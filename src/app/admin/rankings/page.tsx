@@ -130,7 +130,7 @@ export default function RankingsPage() {
           <PageHeader eyebrow="Student Rankings" />
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <Select
-              value={academicYearId}
+              value={activeAcademicYearId ?? ""}
               onValueChange={(v) => {
                 if (!v) return;
                 updateQuery("year", v);
