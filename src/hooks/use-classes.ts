@@ -17,10 +17,10 @@ export function useClasses(params: ClassListParams = {}) {
   });
 }
 
-export function useClassOptions() {
+export function useClassOptions(params: { academicYearId?: string } = {}) {
   return useQuery({
-    queryKey: [...classesKey, "options"],
-    queryFn: fetchClassOptions,
+    queryKey: [...classesKey, "options", params],
+    queryFn: () => fetchClassOptions(params),
   });
 }
 

@@ -36,6 +36,9 @@ export function RowActions({
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
+  const canRenderMenu = Boolean(entityName && values && onDelete);
+  const canRenderView = Boolean(fields && values && entityName);
+
   return (
     <div className="flex justify-end">
       <DropdownMenu>
@@ -56,16 +59,20 @@ export function RowActions({
           side="bottom"
           className="min-w-32 rounded-none"
         >
-          {entityName && fields && values && onEdit && onDelete && (
+          {canRenderMenu && (
             <>
-              <DropdownMenuItem onClick={() => setViewOpen(true)}>
-                <Eye className="size-4" />
-                View
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setEditOpen(true)}>
-                <Pencil className="size-4" />
-                Edit
-              </DropdownMenuItem>
+              {canRenderView && (
+                <DropdownMenuItem onClick={() => setViewOpen(true)}>
+                  <Eye className="size-4" />
+                  View
+                </DropdownMenuItem>
+              )}
+              {onEdit && (
+                <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                  <Pencil className="size-4" />
+                  Edit
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 variant="destructive"
                 onClick={() => setDeleteOpen(true)}
@@ -77,35 +84,41 @@ export function RowActions({
           )}
         </DropdownMenuContent>
       </DropdownMenu>
-      {entityName && fields && values && onEdit && onDelete && (
+      {canRenderMenu && (
         <>
-          <EntityFormDialog
-            mode="view"
-            title={entityName}
-            fields={fields}
-            initialValues={values}
-            onSubmit={() => {}}
-            open={viewOpen}
-            onOpenChange={setViewOpen}
-          />
-          <EntityFormDialog
-            mode="edit"
-            title={`Edit ${entityName}`}
-            fields={fields}
-            initialValues={values}
-            onSubmit={onEdit}
-            open={editOpen}
-            onOpenChange={setEditOpen}
-            isLoading={editIsLoading}
-            submitLabel="Save changes"
-          />
-          <ConfirmDeleteDialog
-            name={entityName}
-            onConfirm={onDelete}
-            open={deleteOpen}
-            onOpenChange={setDeleteOpen}
-            isLoading={deleteIsLoading}
-          />
+          {canRenderView && entityName && fields && values && (
+            <EntityFormDialog
+              mode="view"
+              title={entityName}
+              fields={fields as FieldConfig[]}
+              initialValues={values}
+              onSubmit={() => {}}
+              open={viewOpen}
+              onOpenChange={setViewOpen}
+            />
+          )}
+          {onEdit && entityName && fields && values && (
+            <EntityFormDialog
+              mode="edit"
+              title={`Edit ${entityName}`}
+              fields={fields}
+              initialValues={values}
+              onSubmit={onEdit}
+              open={editOpen}
+              onOpenChange={setEditOpen}
+              isLoading={editIsLoading}
+              submitLabel="Save changes"
+            />
+          )}
+          {onDelete && entityName && (
+            <ConfirmDeleteDialog
+              name={entityName}
+              onConfirm={onDelete}
+              open={deleteOpen}
+              onOpenChange={setDeleteOpen}
+              isLoading={deleteIsLoading}
+            />
+          )}
         </>
       )}
     </div>

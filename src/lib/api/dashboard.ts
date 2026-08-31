@@ -72,6 +72,22 @@ type AcademicYearRecord = {
 
 type SemesterRecord = { academic_year_id: string; name: string };
 
+function resolveStudentDisplayName(
+  profile?: Partial<ProfileRow> | null,
+  fallback = "Unknown student",
+) {
+  const fullName = profile?.full_name?.trim();
+  if (fullName) return fullName;
+
+  const username = profile?.username?.trim();
+  if (username) return username;
+
+  const email = profile?.email?.trim();
+  if (email) return email.split("@")[0] || fallback;
+
+  return fallback;
+}
+
 export interface DashboardData {
   academicYear: string;
   semester: string;
@@ -162,10 +178,16 @@ export async function fetchDashboard(): Promise<DashboardData> {
 
   const classesById = new Map(classes.map((row) => [row.id, row]));
   const teachersById = new Map(teachers.map((row) => [row.id, row.profile_id]));
-  const profilesById = new Map([
-    ...students.map((row) => [row.profile_id, row.profiles[0]] as const),
-    ...teachers.map((row) => [row.profile_id, row.profiles[0]] as const),
-  ]);
+  const profilesById = new Map(
+    [
+      ...students.map(
+        (row) => [row.profile_id, row.profiles?.[0] ?? null] as const,
+      ),
+      ...teachers.map(
+        (row) => [row.profile_id, row.profiles?.[0] ?? null] as const,
+      ),
+    ].filter(([, profile]) => profile !== null),
+  );
   const scoresBySubject = new Map<string, number[]>();
   grades.forEach((grade) => {
     const classSubject = classSubjects.find(
@@ -177,19 +199,32 @@ export async function fetchDashboard(): Promise<DashboardData> {
     scoresBySubject.set(classSubject.subject_id, scores);
   });
 
-  const mappedStudents: AllStudentRow[] = students.map((student) => ({
-    id: student.id,
-    student_number: "",
-    profile: student.profiles[0],
-    className: student.classes[0]
-      ? `Grade ${student.classes[0].grade} - ${student.classes[0].section ?? ""}`
-      : "Unassigned",
-    avgScore: 0,
-    joined: new Date(student.created_at).toLocaleDateString(),
-    phone: student.phone ?? "",
-    dob: student.date_of_birth ?? "",
-    classId: student.class_id ?? "",
-  }));
+  const mappedStudents: AllStudentRow[] = students.map((student) => {
+    const profile = student.profiles?.[0] ?? null;
+    const resolvedName = resolveStudentDisplayName(profile, "Unknown student");
+    const safeProfile = {
+      id: profile?.id ?? student.profile_id,
+      full_name: resolvedName,
+      username: profile?.username ?? "-",
+      email: profile?.email ?? "-",
+      role: "student" as const,
+    };
+    const classRow = student.classes?.[0];
+
+    return {
+      id: student.id,
+      student_number: student.id.slice(0, 8).toUpperCase(),
+      profile: safeProfile,
+      className: classRow
+        ? `Grade ${classRow.grade} - ${classRow.section ?? ""}`
+        : "Unassigned",
+      avgScore: 0,
+      joined: new Date(student.created_at).toLocaleDateString(),
+      phone: student.phone ?? "Not provided",
+      dob: student.date_of_birth ?? "",
+      classId: student.class_id ?? "",
+    };
+  });
 
   const mappedClasses: ClassRow[] = classes.map((classRow) => ({
     ...classRow,
@@ -250,15 +285,19 @@ export async function fetchDashboard(): Promise<DashboardData> {
       const studentRecord = students.find(
         (row) => row.id === payment.student_id,
       );
-      const className = studentRecord?.classes[0]
-        ? `Grade ${studentRecord.classes[0].grade} - ${studentRecord.classes[0].section ?? ""}`
+      const classRow = studentRecord?.classes?.[0];
+      const className = classRow
+        ? `Grade ${classRow.grade} - ${classRow.section ?? ""}`
         : "Unassigned";
+      const studentProfile = payment.students?.[0]?.profiles?.[0];
 
       return {
         id: payment.id,
         studentId: payment.student_id,
-        studentName:
-          payment.students[0]?.profiles[0]?.full_name ?? "Unknown student",
+        studentName: resolveStudentDisplayName(
+          studentProfile,
+          "Unknown student",
+        ),
         studentNumber: "",
         classId: studentRecord?.class_id ?? "",
         className,

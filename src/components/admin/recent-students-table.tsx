@@ -10,7 +10,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { AllStudentRow } from "@/lib/mock-data";
-import { GradeBadge } from "./grade-badge";
 
 function initials(name: string) {
   return name
@@ -18,6 +17,10 @@ function initials(name: string) {
     .map((n) => n[0])
     .slice(0, 2)
     .join("");
+}
+
+function displayName(student: AllStudentRow) {
+  return student.profile?.full_name ?? "Unknown student";
 }
 
 export function RecentStudentsTable({
@@ -37,49 +40,61 @@ export function RecentStudentsTable({
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <TableHead>Student</TableHead>
-              <TableHead>Student No.</TableHead>
+              <TableHead>Username</TableHead>
+              <TableHead>Password</TableHead>
+              <TableHead>Grade</TableHead>
               <TableHead>Class</TableHead>
-              <TableHead>Avg. Score</TableHead>
-              <TableHead className="text-right">Joined</TableHead>
+              <TableHead>Phone</TableHead>
+              <TableHead>Date of Birth</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {students.map((s) => (
-              <TableRow key={s.id}>
-                <TableCell>
-                  <div className="flex items-center gap-3">
-                    <Avatar className="size-8 rounded-none">
-                      <AvatarFallback className="rounded-none bg-secondary text-xs">
-                        {initials(s.profile.full_name)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium">
-                        {s.profile.full_name}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {s.profile.email}
-                      </span>
+            {students.map((s) => {
+              const fullName = s.profile?.full_name ?? "Unknown student";
+              const email = s.profile?.email ?? "-";
+              const username = s.profile?.username ?? "-";
+              const classParts = (s.className || "").split(" - ");
+              const gradeLabel = classParts[0] || s.className || "Unassigned";
+              const classLabel = classParts[1] || "-";
+
+              return (
+                <TableRow key={s.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <Avatar className="size-8 rounded-none">
+                        <AvatarFallback className="rounded-none bg-secondary text-xs">
+                          {initials(fullName)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">{fullName}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {email}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                </TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">
-                  {s.student_number}
-                </TableCell>
-                <TableCell className="text-sm">{s.className}</TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm tabular-nums">
-                      {s.avgScore.toFixed(1)}
-                    </span>
-                    <GradeBadge score={s.avgScore} />
-                  </div>
-                </TableCell>
-                <TableCell className="text-right text-xs text-muted-foreground">
-                  {s.joined}
-                </TableCell>
-              </TableRow>
-            ))}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">
+                    {username}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">
+                    {s.temporaryPassword ?? "-"}
+                  </TableCell>
+                  <TableCell className="text-sm font-medium text-blue-600">
+                    {gradeLabel}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {classLabel}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {s.phone || "Not provided"}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {s.dob || "-"}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </CardContent>

@@ -166,7 +166,7 @@ export async function fetchRankings({
       return [
         {
           studentId: student.id,
-          studentName: student.profiles[0]?.full_name ?? "Unknown student",
+          studentName: student.profiles[0]?.full_name ?? "Student",
           classId: classRow.id,
           className: `Grade ${classRow.grade} - ${classRow.section ?? ""}`,
           semester1: average(bucket.semester1),

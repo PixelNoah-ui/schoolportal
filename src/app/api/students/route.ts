@@ -4,12 +4,19 @@ import { cookies } from "next/headers";
 import { createClient as createServerClient } from "@/utils/supabase/server";
 
 function usernameBase(fullName: string) {
-  return (
-    fullName
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, ".")
-      .replace(/^\.|\.$/g, "") || "student"
-  );
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  const first = (parts[0] ?? "student").replace(/[^a-z]/gi, "").toLowerCase();
+  const last = (parts.slice(1).join(" ") ?? "")
+    .replace(/[^a-z]/gi, "")
+    .toLowerCase();
+
+  const base = [first, last ? last.slice(0, 5) : ""]
+    .filter(Boolean)
+    .join(".")
+    .replace(/\.+/g, ".")
+    .replace(/^\.|\.$/g, "");
+
+  return (base || "student").slice(0, 14);
 }
 
 export async function POST(request: Request) {
@@ -18,9 +25,11 @@ export async function POST(request: Request) {
   const email = String(body.email ?? "")
     .trim()
     .toLowerCase();
-  if (!fullName || !email)
+  const gradeId = String(body.grade_id ?? "").trim();
+
+  if (!fullName || !email || !gradeId)
     return NextResponse.json(
-      { error: "Name and email are required" },
+      { error: "Name, email, and grade are required" },
       { status: 400 },
     );
 
@@ -59,13 +68,33 @@ export async function POST(request: Request) {
   const { data: existing } = await admin
     .from("profiles")
     .select("username")
-    .like("username", `${base}%`);
-  const usernames = new Set(
-    (existing ?? []).map((profile) => profile.username),
-  );
+    .ilike("username", `${base}%`);
+  const usernames = new Set((existing ?? []).map((profile) => profile.username));
+
   let username = base;
-  let suffix = 2;
-  while (usernames.has(username)) username = `${base}${suffix++}`;
+  let suffix = 1;
+  while (usernames.has(username)) {
+    username = `${base}${suffix}`;
+    suffix += 1;
+  }
+
+  const { data: gradeRecord, error: gradeError } = await admin
+    .from("grade_levels")
+    .select("id")
+    .eq("id", gradeId)
+    .maybeSingle();
+
+  if (gradeError) {
+    return NextResponse.json({ error: gradeError.message }, { status: 400 });
+  }
+
+  if (!gradeRecord) {
+    return NextResponse.json(
+      { error: "Selected grade was not found" },
+      { status: 400 },
+    );
+  }
+
   const temporaryPassword = `${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}A1!`;
 
   const { data: authData, error: authError } =
@@ -98,6 +127,8 @@ export async function POST(request: Request) {
     .insert({
       id: crypto.randomUUID(),
       profile_id: authData.user.id,
+      grade_id: gradeId,
+      class_id: body.class_id || null,
       phone: body.phone || null,
       date_of_birth: body.dob || null,
       temporary_password: temporaryPassword,

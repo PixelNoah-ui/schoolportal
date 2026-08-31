@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import { useState } from "react";
+import { Loader2, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { SiteHeader } from "@/components/admin/site-header";
 import { PageHeader } from "@/components/admin/page-header";
+import { ConfirmDeleteDialog } from "@/components/admin/confirm-delete-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,41 +13,88 @@ import { Badge } from "@/components/ui/badge";
 import {
   useAcademicYears,
   useCreateAcademicYear,
+  useDeleteAcademicYear,
+  useUpdateAcademicYear,
 } from "@/hooks/use-academic-years";
+
+const defaultSemesters = ["Semester 1", "Semester 2"];
+
+function buildAcademicYearName(startDate: string, endDate: string) {
+  if (!startDate || !endDate) return "Academic year";
+
+  const startYear = new Date(startDate).getFullYear();
+  const endYear = new Date(endDate).getFullYear();
+
+  return `${startYear}/${endYear}`;
+}
 
 export default function AcademicYearsPage() {
   const { data = [], isLoading } = useAcademicYears();
   const createAcademicYear = useCreateAcademicYear();
-  const [name, setName] = useState("");
+  const updateAcademicYear = useUpdateAcademicYear();
+  const deleteAcademicYear = useDeleteAcademicYear();
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [semesters, setSemesters] = useState("Semester 1, Semester 2");
+  const [editingId, setEditingId] = useState<string | null>(null);
 
-  const currentYear = useMemo(
-    () => data.find((year) => year.isCurrent) ?? data[0],
-    [data],
-  );
-
-  const handleSubmit = () => {
-    if (!name.trim()) return;
-    createAcademicYear.mutate({
-      name,
-      start_date: startDate,
-      end_date: endDate,
-      is_current: currentYear ? "false" : "true",
-      semesters: JSON.stringify(
-        semesters
-          .split(",")
-          .map((semester) => semester.trim())
-          .filter(Boolean)
-          .map((semesterName) => ({ name: semesterName })),
-      ),
-    });
-    setName("");
+  function resetForm() {
     setStartDate("");
     setEndDate("");
-    setSemesters("Semester 1, Semester 2");
+    setEditingId(null);
+  }
+
+  function startEdit(year: (typeof data)[number]) {
+    setEditingId(year.id);
+    setStartDate(year.startDate ?? "");
+    setEndDate(year.endDate ?? "");
+  }
+
+  function handleDeleteYear(id: string) {
+    deleteAcademicYear.mutate(id);
+  }
+
+  const handleSubmit = () => {
+    if (!startDate || !endDate) return;
+
+    const generatedName = buildAcademicYearName(startDate, endDate);
+
+    createAcademicYear.mutate({
+      name: generatedName,
+      start_date: startDate,
+      end_date: endDate,
+      is_current: "true",
+      semesters: JSON.stringify(
+        defaultSemesters.map((semesterName) => ({ name: semesterName })),
+      ),
+    });
+
+    resetForm();
   };
+
+  const handleUpdate = () => {
+    if (!editingId || !startDate || !endDate) return;
+
+    const generatedName = buildAcademicYearName(startDate, endDate);
+
+    updateAcademicYear.mutate({
+      id: editingId,
+      payload: {
+        name: generatedName,
+        start_date: startDate,
+        end_date: endDate,
+        is_current: "true",
+        status: "active",
+        semesters: JSON.stringify(
+          defaultSemesters.map((semesterName) => ({ name: semesterName })),
+        ),
+      },
+    });
+
+    resetForm();
+  };
+
+  const isSubmitting =
+    createAcademicYear.isPending || updateAcademicYear.isPending;
 
   return (
     <>
@@ -59,30 +107,11 @@ export default function AcademicYearsPage() {
         <Card className="rounded-none shadow-none">
           <CardHeader className="border-b pb-4">
             <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Create academic year
+              {editingId ? "Edit academic year" : "Create academic year"}
             </span>
           </CardHeader>
           <CardContent className="grid gap-4 pt-6 lg:grid-cols-[1.2fr_0.8fr]">
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="year-name">Name</Label>
-                <Input
-                  id="year-name"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="2026/2027"
-                  className="rounded-none"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="year-status">Current active year</Label>
-                <Input
-                  id="year-status"
-                  value={currentYear ? currentYear.name : "No active year"}
-                  disabled
-                  className="rounded-none bg-muted/40"
-                />
-              </div>
               <div className="space-y-2">
                 <Label htmlFor="year-start">Start date</Label>
                 <Input
@@ -104,25 +133,48 @@ export default function AcademicYearsPage() {
                 />
               </div>
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="year-semesters">Default semesters</Label>
+                <Label htmlFor="year-semesters">Semesters</Label>
                 <Input
                   id="year-semesters"
-                  value={semesters}
-                  onChange={(event) => setSemesters(event.target.value)}
-                  placeholder="Semester 1, Semester 2"
-                  className="rounded-none"
+                  value={defaultSemesters.join(", ")}
+                  disabled
+                  className="rounded-none bg-muted/40"
                 />
               </div>
             </div>
 
-            <div className="flex items-end justify-end">
+            <div className="flex items-end justify-end gap-2">
+              {editingId && (
+                <Button
+                  variant="outline"
+                  className="rounded-none"
+                  onClick={resetForm}
+                  disabled={isSubmitting}
+                >
+                  <X className="size-4" />
+                  Cancel
+                </Button>
+              )}
               <Button
                 className="rounded-none"
-                onClick={handleSubmit}
-                disabled={createAcademicYear.isPending || !name.trim()}
+                onClick={editingId ? handleUpdate : handleSubmit}
+                disabled={!startDate || !endDate || isSubmitting}
               >
-                <Plus className="size-4" />
-                Create year
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    {editingId ? "Saving..." : "Creating..."}
+                  </>
+                ) : (
+                  <>
+                    {editingId ? (
+                      <Save className="size-4" />
+                    ) : (
+                      <Plus className="size-4" />
+                    )}
+                    {editingId ? "Save changes" : "Create year"}
+                  </>
+                )}
               </Button>
             </div>
           </CardContent>
@@ -158,6 +210,7 @@ export default function AcademicYearsPage() {
                     )}
                   </div>
                 </div>
+
                 <div className="mt-3 flex flex-wrap gap-2">
                   {year.semesters.length > 0 ? (
                     year.semesters.map((semester) => (
@@ -175,8 +228,41 @@ export default function AcademicYearsPage() {
                     </Badge>
                   )}
                 </div>
-                <div className="mt-4 text-xs text-muted-foreground">
-                  Status: {year.status}
+
+                <div className="mt-4 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span>Status: {year.status}</span>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-none"
+                      onClick={() => startEdit(year)}
+                      disabled={isSubmitting}
+                    >
+                      <Pencil className="size-3.5" />
+                      Edit
+                    </Button>
+                    <ConfirmDeleteDialog
+                      name={`academic year ${year.name}`}
+                      onConfirm={() => handleDeleteYear(year.id)}
+                      trigger={
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="rounded-none"
+                          disabled={deleteAcademicYear.isPending}
+                        >
+                          {deleteAcademicYear.isPending ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="size-3.5" />
+                          )}
+                          Delete
+                        </Button>
+                      }
+                      isLoading={deleteAcademicYear.isPending}
+                    />
+                  </div>
                 </div>
               </div>
             ))

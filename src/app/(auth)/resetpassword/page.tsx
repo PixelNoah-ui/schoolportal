@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useForm, useWatch, type SubmitHandler } from "react-hook-form";
-import { Eye, EyeOff, CheckCircle2, Loader2 } from "lucide-react";
+import { AlertCircle, Eye, EyeOff, CheckCircle2, Loader2 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -146,9 +146,13 @@ export default function ResetPasswordPage() {
                   )}
                 </div>
                 {updatePassword.error && (
-                  <p className="text-xs text-destructive">
-                    {updatePassword.error.message}
-                  </p>
+                  <div
+                    role="alert"
+                    className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+                  >
+                    <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                    <p className="leading-5">{updatePassword.error.message}</p>
+                  </div>
                 )}
                 <Button
                   type="submit"

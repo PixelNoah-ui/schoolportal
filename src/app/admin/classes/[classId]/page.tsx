@@ -2,7 +2,14 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, BookOpen, Plus, Trash2, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  BookOpen,
+  Plus,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { SiteHeader } from "@/components/admin/site-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +44,7 @@ export default function ClassDetailPage() {
   const classId = params.classId;
   const [selectedSubject, setSelectedSubject] = useState<string>("");
   const [selectedTeacher, setSelectedTeacher] = useState<string>("");
+  const [removeError, setRemoveError] = useState<string | null>(null);
 
   const { data, isLoading } = useClassSubjects(classId);
   const { data: subjectOptions } = useAvailableSubjects(classId);
@@ -76,11 +84,16 @@ export default function ClassDetailPage() {
   };
 
   const handleRemove = (classSubjectId: string) => {
+    setRemoveError(null);
     removeClassSubject.mutate(
       { classSubjectId },
       {
         onError: (error) => {
-          alert(error.message);
+          setRemoveError(
+            error instanceof Error && error.message
+              ? error.message
+              : "We couldn’t remove this class assignment. Please try again.",
+          );
         },
       },
     );
@@ -119,6 +132,16 @@ export default function ClassDetailPage() {
             </p>
           </div>
         </div>
+
+        {removeError && (
+          <div
+            role="alert"
+            className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+          >
+            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+            <p className="leading-5">{removeError}</p>
+          </div>
+        )}
 
         <div className="rounded-none border bg-card p-4">
           <div className="flex flex-col gap-4 md:flex-row md:items-end">

@@ -8,10 +8,7 @@ import { SiteHeader } from "@/components/admin/site-header";
 import { PageHeader } from "@/components/admin/page-header";
 import { DataToolbar } from "@/components/admin/data-toolbar";
 import { RowActions } from "@/components/admin/row-actions";
-import {
-  EntityFormDialog,
-  type FieldConfig,
-} from "@/components/admin/entity-form-dialog";
+import { ClassFormDialog } from "@/components/admin/class-form-dialog";
 import { TableSkeleton } from "@/components/admin/table-skeleton";
 import { EntityEmptyState } from "@/components/admin/entity-empty-state";
 import { Button } from "@/components/ui/button";
@@ -39,12 +36,6 @@ import {
 } from "@/hooks/use-classes";
 import { useAcademicYears } from "@/hooks/use-academic-years";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-
-const classFields: FieldConfig[] = [
-  { name: "name", label: "Class name" },
-  { name: "grade", label: "Grade", type: "number" },
-  { name: "section", label: "Section" },
-];
 
 export default function ClassesPage() {
   const router = useRouter();
@@ -101,11 +92,8 @@ export default function ClassesPage() {
       <div className="flex flex-1 flex-col gap-5 p-6">
         <div className="flex items-center justify-between">
           <PageHeader eyebrow="All Classes" count={data?.classes.length} />
-          <EntityFormDialog
+          <ClassFormDialog
             mode="add"
-            title="Add class"
-            description="Create a new class record."
-            fields={classFields}
             open={addOpen}
             onOpenChange={setAddOpen}
             onSubmit={(values) =>
@@ -188,25 +176,57 @@ export default function ClassesPage() {
                         <Eye className="size-3.5" />
                         View
                       </Link>
-                      <RowActions
-                        entityName={`${classRow.name} - Grade ${classRow.grade}`}
-                        fields={classFields}
-                        values={{
-                          name: classRow.name,
-                          grade: String(classRow.grade),
-                          section: classRow.section,
-                        }}
-                        onEdit={(values) =>
-                          updateClass.mutate({
-                            id: classRow.id,
-                            payload: {
-                              ...values,
-                              academic_year_id: activeAcademicYearId || "",
-                            },
-                          })
-                        }
-                        onDelete={() => deleteClass.mutate(classRow.id)}
-                      />
+                      <div className="flex items-center justify-end gap-2">
+                        <ClassFormDialog
+                          mode="edit"
+                          initialValues={{
+                            grade: String(classRow.grade),
+                            section: classRow.section || "",
+                            homeroom_teacher: "",
+                          }}
+                          onSubmit={(values) =>
+                            updateClass.mutateAsync({
+                              id: classRow.id,
+                              payload: {
+                                ...values,
+                                academic_year_id: activeAcademicYearId || "",
+                              },
+                            })
+                          }
+                          isLoading={updateClass.isPending}
+                          trigger={
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-8 rounded-none"
+                            >
+                              <svg
+                                viewBox="0 0 24 24"
+                                className="size-4"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                aria-hidden="true"
+                              >
+                                <path d="M12 20h9" />
+                                <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z" />
+                              </svg>
+                            </Button>
+                          }
+                        />
+                        <RowActions
+                          entityName={`${classRow.name} - Grade ${classRow.grade}`}
+                          values={{
+                            name: classRow.name,
+                            grade: String(classRow.grade),
+                            section: classRow.section,
+                            homeroom_teacher: "",
+                          }}
+                          onDelete={() => deleteClass.mutate(classRow.id)}
+                        />
+                      </div>
                     </div>
                   </TableCell>
                 </TableRow>

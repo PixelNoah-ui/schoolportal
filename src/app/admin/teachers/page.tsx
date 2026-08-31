@@ -8,10 +8,8 @@ import { SiteHeader } from "@/components/admin/site-header";
 import { PageHeader } from "@/components/admin/page-header";
 import { DataToolbar } from "@/components/admin/data-toolbar";
 import { RowActions } from "@/components/admin/row-actions";
-import {
-  EntityFormDialog,
-  type FieldConfig,
-} from "@/components/admin/entity-form-dialog";
+import { type FieldConfig } from "@/components/admin/entity-form-dialog";
+import { TeacherFormDialog } from "@/components/admin/teacher-form-dialog";
 import { TableSkeleton } from "@/components/admin/table-skeleton";
 import { EntityEmptyState } from "@/components/admin/entity-empty-state";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -43,7 +41,8 @@ function initials(name: string) {
     .join("");
 }
 
-const teacherFields: FieldConfig[] = [
+// For editing teacher basic info only
+const editTeacherFields: FieldConfig[] = [
   { name: "full_name", label: "Full name" },
   { name: "email", label: "Email", type: "email" },
   { name: "phone", label: "Phone" },
@@ -96,11 +95,8 @@ export default function TeachersPage() {
       <div className="flex flex-1 flex-col gap-5 p-6">
         <div className="flex items-center justify-between">
           <PageHeader eyebrow="All Teachers" count={data?.teachers.length} />
-          <EntityFormDialog
+          <TeacherFormDialog
             mode="add"
-            title="Add teacher"
-            description="Create a new teacher record."
-            fields={teacherFields}
             open={addOpen}
             onOpenChange={setAddOpen}
             onSubmit={(values) => createTeacher.mutateAsync(values)}
@@ -124,7 +120,7 @@ export default function TeachersPage() {
             <TableRow className="hover:bg-transparent">
               <TableHead>Teacher</TableHead>
               <TableHead>Username</TableHead>
-              <TableHead>Temporary Password</TableHead>
+              <TableHead>Password</TableHead>
               <TableHead>Subjects</TableHead>
               <TableHead>Classes</TableHead>
               <TableHead>Phone</TableHead>
@@ -183,7 +179,7 @@ export default function TeachersPage() {
                   <TableCell>
                     <RowActions
                       entityName={t.profile.full_name}
-                      fields={teacherFields}
+                      fields={editTeacherFields}
                       values={{
                         full_name: t.profile.full_name,
                         email: t.profile.email,

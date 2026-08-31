@@ -24,7 +24,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useClassOptions } from "@/hooks/use-classes";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import {
   useSubjects,
@@ -33,7 +32,15 @@ import {
   useDeleteSubject,
 } from "@/hooks/use-subjects";
 
-const subjectFields: FieldConfig[] = [{ name: "name", label: "Subject" }];
+const gradeOptions = Array.from({ length: 12 }, (_, index) => ({
+  label: `Grade ${index + 1}`,
+  value: String(index + 1),
+}));
+
+const subjectFields: FieldConfig[] = [
+  { name: "name", label: "Subject Name" },
+  { name: "grade", label: "Grade", type: "select", options: gradeOptions },
+];
 
 export default function SubjectsPage() {
   const router = useRouter();
@@ -41,21 +48,18 @@ export default function SubjectsPage() {
   const search = searchParams.get("search") ?? "";
   const [searchInput, setSearchInput] = useState(search);
   const debouncedSearch = useDebouncedValue(searchInput);
-  const classFilter = searchParams.get("class") ?? "all";
   const currentPage = Math.max(1, Number(searchParams.get("page") ?? "1"));
   const [addOpen, setAddOpen] = useState(false);
 
   const { data, isLoading } = useSubjects({
     search: debouncedSearch,
-    classId: classFilter,
     page: currentPage,
   });
-  const { data: classOptions } = useClassOptions();
   const createSubject = useCreateSubject();
   const updateSubject = useUpdateSubject();
   const deleteSubject = useDeleteSubject();
 
-  const hasFilters = Boolean(search) || classFilter !== "all";
+  const hasFilters = Boolean(search);
   const isEmpty = !isLoading && (data?.subjects.length ?? 0) === 0;
 
   const updateQuery = useCallback(
@@ -106,24 +110,14 @@ export default function SubjectsPage() {
           searchValue={searchInput}
           onSearchChange={setSearchInput}
           searchPlaceholder="Search by subject name"
-          filterOptions={
-            classOptions?.map((classRow) => ({
-              label: `Grade ${classRow.grade} - ${classRow.section}`,
-              value: classRow.id,
-            })) ?? []
-          }
-          filterValue={classFilter}
-          onFilterChange={(value) => updateQuery("class", value)}
-          filterLabel="All Classes"
         />
 
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <TableHead>Subject</TableHead>
-              <TableHead>Class</TableHead>
+              <TableHead>Grade</TableHead>
               <TableHead>Teacher</TableHead>
-              <TableHead>Class Average</TableHead>
               <TableHead className="w-28 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -137,23 +131,20 @@ export default function SubjectsPage() {
                   <TableCell className="text-sm font-medium">
                     {subject.name}
                   </TableCell>
-                  <TableCell className="text-sm">{subject.className}</TableCell>
+                  <TableCell className="text-sm">
+                    {subject.grade ? `Grade ${subject.grade}` : "-"}
+                  </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {subject.teacher}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm tabular-nums">
-                        {subject.avgScore.toFixed(1)}%
-                      </span>
-                      <GradeBadge score={subject.avgScore} />
-                    </div>
                   </TableCell>
                   <TableCell>
                     <RowActions
                       entityName={subject.name}
                       fields={subjectFields}
-                      values={{ name: subject.name }}
+                      values={{
+                        name: subject.name,
+                        grade: String(subject.grade ?? ""),
+                      }}
                       onEdit={(values) =>
                         updateSubject.mutateAsync({
                           id: subject.id,
@@ -178,7 +169,7 @@ export default function SubjectsPage() {
             hasFilters={hasFilters}
             onClearFilters={hasFilters ? clearFilters : undefined}
             onAdd={!hasFilters ? () => setAddOpen(true) : undefined}
-            description="Once you add subjects, they'll show up here with their class, teacher, and calculated average."
+            description="Once you add subjects, they'll show up here with their grade and assigned teacher."
           />
         )}
 

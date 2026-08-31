@@ -3,10 +3,10 @@ import { createClient } from "@/utils/supabase/client";
 export interface SubjectRow {
   id: string;
   name: string;
+  grade: number | null;
   className: string;
   classId: string;
   teacher: string;
-  avgScore: number;
 }
 
 export interface SubjectListParams {
@@ -24,6 +24,7 @@ export interface SubjectListResult {
 type SubjectRecord = {
   id: string;
   name: string;
+  grade: number | null;
   class_subjects: {
     class_id: string;
     classes: { id: string; grade: number; section: string | null }[];
@@ -33,19 +34,6 @@ type SubjectRecord = {
 };
 
 function mapSubject(subject: SubjectRecord): SubjectRow {
-  const classNames = [
-    ...new Set(
-      subject.class_subjects
-        .flatMap((row) =>
-          row.classes.map((classRow) =>
-            classRow
-              ? `Grade ${classRow.grade} - ${classRow.section ?? ""}`
-              : null,
-          ),
-        )
-        .filter(Boolean),
-    ),
-  ];
   const teacherNames = [
     ...new Set(
       subject.class_subjects
@@ -57,19 +45,14 @@ function mapSubject(subject: SubjectRecord): SubjectRow {
         .filter(Boolean),
     ),
   ];
-  const scores = subject.class_subjects.flatMap((row) =>
-    row.grades.map((grade) => Number(grade.score)),
-  );
 
   return {
     id: subject.id,
     name: subject.name,
+    grade: subject.grade ?? null,
     classId: subject.class_subjects[0]?.class_id ?? "",
-    className: classNames.length ? classNames.join(", ") : "All classes",
+    className: subject.grade ? `Grade ${subject.grade}` : "Unassigned grade",
     teacher: teacherNames.length ? teacherNames.join(", ") : "Unassigned",
-    avgScore: scores.length
-      ? scores.reduce((total, score) => total + score, 0) / scores.length
-      : 0,
   };
 }
 
@@ -85,7 +68,7 @@ export async function fetchSubjects({
   let request = supabase
     .from("subjects")
     .select(
-      "id, name, class_subjects(class_id, classes(id, grade, section), teachers(profiles(full_name)), grades(score))",
+      "id, name, grade, class_subjects(class_id, classes(id, grade, section), teachers(profiles(full_name)), grades(score))",
       { count: "exact" },
     )
     .order("name")
@@ -108,9 +91,12 @@ export async function createSubject(payload: Record<string, string>) {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("subjects")
-    .insert({ name: payload.name.trim() })
+    .insert({
+      name: payload.name.trim(),
+      grade: payload.grade ? Number(payload.grade) : null,
+    })
     .select(
-      "id, name, class_subjects(class_id, classes(id, grade, section), teachers(profiles(full_name)), grades(score))",
+      "id, name, grade, class_subjects(class_id, classes(id, grade, section), teachers(profiles(full_name)), grades(score))",
     )
     .single();
   if (error) throw new Error(error.message);
@@ -124,10 +110,17 @@ export async function updateSubject(
   const supabase = createClient();
   const { error } = await supabase
     .from("subjects")
-    .update({ name: payload.name.trim() })
+    .update({
+      name: payload.name.trim(),
+      grade: payload.grade ? Number(payload.grade) : null,
+    })
     .eq("id", id);
   if (error) throw new Error(error.message);
-  return { id, name: payload.name };
+  return {
+    id,
+    name: payload.name,
+    grade: payload.grade ? Number(payload.grade) : null,
+  };
 }
 
 export async function deleteSubject(id: string) {

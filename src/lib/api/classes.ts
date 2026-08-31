@@ -100,13 +100,21 @@ export async function fetchClasses({
   };
 }
 
-export async function fetchClassOptions(): Promise<ClassOption[]> {
+export async function fetchClassOptions({
+  academicYearId,
+}: { academicYearId?: string } = {}): Promise<ClassOption[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
+  let request = supabase
     .from("classes")
     .select("id, academic_year_id, name, grade, section")
     .order("grade", { ascending: true })
     .order("section", { ascending: true });
+
+  if (academicYearId && academicYearId !== "all") {
+    request = request.eq("academic_year_id", academicYearId);
+  }
+
+  const { data, error } = await request;
   if (error) throw new Error(error.message);
   return (data ?? []).map((classRow) => ({
     id: classRow.id,
@@ -116,15 +124,23 @@ export async function fetchClassOptions(): Promise<ClassOption[]> {
   }));
 }
 
+function buildClassName(grade: number | string, section?: string | null) {
+  const cleanSection = section?.trim();
+  return cleanSection ? `Grade ${grade} - ${cleanSection}` : `Grade ${grade}`;
+}
+
 export async function createClass(payload: Record<string, string>) {
   const supabase = createClient();
-  const section = payload.section.trim();
+  const grade = Number(payload.grade ?? 0);
+  const section = (payload.section ?? "").trim();
+  const className = payload.name?.trim() || buildClassName(grade, section);
+
   const { data, error } = await supabase
     .from("classes")
     .insert({
       academic_year_id: payload.academic_year_id || null,
-      name: payload.name?.trim() || `Class ${section}`,
-      grade: Number(payload.grade),
+      name: className,
+      grade,
       section: section || null,
     })
     .select(
@@ -137,18 +153,21 @@ export async function createClass(payload: Record<string, string>) {
 
 export async function updateClass(id: string, payload: Record<string, string>) {
   const supabase = createClient();
-  const section = payload.section.trim();
+  const grade = Number(payload.grade ?? 0);
+  const section = (payload.section ?? "").trim();
+  const className = payload.name?.trim() || buildClassName(grade, section);
+
   const { error } = await supabase
     .from("classes")
     .update({
       academic_year_id: payload.academic_year_id || null,
-      name: payload.name?.trim() || `Class ${section}`,
-      grade: Number(payload.grade),
+      name: className,
+      grade,
       section: section || null,
     })
     .eq("id", id);
   if (error) throw new Error(error.message);
-  return { id, ...payload };
+  return { id, ...payload, name: className };
 }
 
 export async function deleteClass(id: string) {

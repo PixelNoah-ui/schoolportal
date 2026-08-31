@@ -14,6 +14,40 @@ type RequestOptions<TData> = {
   onSuccess?: (data: TData) => void;
 };
 
+function getFriendlyAuthMessage(message: string) {
+  const normalized = message.toLowerCase();
+
+  if (
+    normalized.includes("invalid login credentials") ||
+    normalized.includes("invalid credentials") ||
+    normalized.includes("email or password") ||
+    normalized.includes("user not found")
+  ) {
+    return "We couldn’t sign you in. Please check your email and password and try again.";
+  }
+
+  if (normalized.includes("email not confirmed")) {
+    return "Please confirm your email before signing in.";
+  }
+
+  if (
+    normalized.includes("too many requests") ||
+    normalized.includes("rate limit")
+  ) {
+    return "Too many attempts. Please wait a moment and try again.";
+  }
+
+  if (normalized.includes("reset") || normalized.includes("email")) {
+    return "We couldn’t send the reset link right now. Please try again in a moment.";
+  }
+
+  if (normalized.includes("password") || normalized.includes("new password")) {
+    return "We couldn’t update your password. Please try again.";
+  }
+
+  return "Something went wrong. Please try again.";
+}
+
 function useRequest<TInput, TData>(
   request: (input: TInput) => Promise<TData>,
   options?: RequestOptions<TData>,
@@ -34,7 +68,7 @@ function useRequest<TInput, TData>(
     } catch (requestError) {
       const normalizedError =
         requestError instanceof Error
-          ? requestError
+          ? new Error(getFriendlyAuthMessage(requestError.message))
           : new Error("Something went wrong. Please try again.");
       setError(normalizedError);
       return null;

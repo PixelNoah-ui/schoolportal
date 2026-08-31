@@ -63,7 +63,7 @@ async function mapPayment(payment: PaymentRecord): Promise<PaymentRow> {
   return {
     id: payment.id,
     studentId: payment.student_id,
-    studentName: student?.profiles[0]?.full_name ?? "Unknown student",
+    studentName: student?.profiles[0]?.full_name ?? "Student",
     studentNumber: "",
     classId: student?.class_id ?? "",
     className: classRow
@@ -179,7 +179,7 @@ export async function fetchPaymentStudents(): Promise<PaymentStudent[]> {
       id: student.id,
       student_number: undefined,
       class_id: student.class_id,
-      full_name: student.profiles[0]?.full_name ?? "Unknown student",
+      full_name: student.profiles[0]?.full_name ?? "Student",
       className: classRow
         ? `Grade ${classRow.grade} - ${classRow.section ?? ""}`
         : "Unassigned",

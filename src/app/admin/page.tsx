@@ -20,6 +20,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table } from "@/components/ui/table";
 import { useDashboard } from "@/hooks/use-dashboard";
 import { DashboardEmptyState } from "@/components/admin/dashboard-empty-state";
+import { AlertTriangle, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function AdminDashboardPage() {
   const { data, isLoading, isError, error, refetch } = useDashboard();
@@ -53,25 +55,39 @@ export default function AdminDashboardPage() {
   }
 
   if (isError) {
+    const message =
+      error instanceof Error && error.message
+        ? error.message.toLowerCase().includes("cannot read properties")
+          ? "We couldn’t load the dashboard right now. Please try again in a moment."
+          : "Something went wrong while loading the dashboard. Please try again."
+        : "Something went wrong while loading the dashboard. Please try again.";
+
     return (
       <>
         <SiteHeader title="Dashboard" />
         <div className="flex flex-1 items-center justify-center p-6">
-          <Card className="w-full max-w-md rounded-none shadow-none">
-            <CardContent className="flex flex-col items-center gap-3 p-8 text-center">
-              <p className="text-sm font-semibold">Could not load dashboard</p>
-              <p className="text-sm text-muted-foreground">
-                {error instanceof Error
-                  ? error.message
-                  : "Something went wrong while loading dashboard data."}
-              </p>
-              <button
+          <Card className="w-full max-w-lg rounded-2xl border border-border bg-card shadow-none">
+            <CardContent className="flex flex-col items-center gap-4 p-8 text-center">
+              <div className="flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+                <AlertTriangle className="size-5" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-lg font-semibold text-foreground">
+                  Could not load dashboard
+                </p>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  {message}
+                </p>
+              </div>
+              <Button
                 type="button"
-                className="text-sm font-medium underline underline-offset-4"
+                variant="outline"
                 onClick={() => refetch()}
+                className="rounded-xl"
               >
+                <RefreshCw className="size-4" />
                 Try again
-              </button>
+              </Button>
             </CardContent>
           </Card>
         </div>

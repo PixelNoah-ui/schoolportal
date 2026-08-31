@@ -16,10 +16,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+export interface FieldOption {
+  label: string;
+  value: string;
+}
+
 export interface FieldConfig {
   name: string;
   label: string;
-  type?: "text" | "email" | "number" | "date";
+  type?: "text" | "email" | "number" | "date" | "select";
+  options?: FieldOption[];
 }
 
 interface EntityFormDialogProps {
@@ -77,16 +83,35 @@ export function EntityFormDialog({
           {fields.map((f) => (
             <div key={f.name} className="space-y-2">
               <Label htmlFor={f.name}>{f.label}</Label>
-              <Input
-                id={f.name}
-                type={f.type ?? "text"}
-                value={values[f.name]}
-                disabled={readOnly}
-                onChange={(e) =>
-                  setValues((prev) => ({ ...prev, [f.name]: e.target.value }))
-                }
-                className="rounded-none"
-              />
+              {f.type === "select" ? (
+                <select
+                  id={f.name}
+                  value={values[f.name] ?? ""}
+                  disabled={readOnly}
+                  onChange={(e) =>
+                    setValues((prev) => ({ ...prev, [f.name]: e.target.value }))
+                  }
+                  className="flex h-10 w-full rounded-none border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="">Select {f.label}</option>
+                  {(f.options ?? []).map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <Input
+                  id={f.name}
+                  type={f.type ?? "text"}
+                  value={values[f.name]}
+                  disabled={readOnly}
+                  onChange={(e) =>
+                    setValues((prev) => ({ ...prev, [f.name]: e.target.value }))
+                  }
+                  className="rounded-none"
+                />
+              )}
             </div>
           ))}
         </div>

@@ -18,6 +18,9 @@ export async function POST(request: Request) {
   const email = String(body.email ?? "")
     .trim()
     .toLowerCase();
+  const phone = String(body.phone ?? "").trim() || null;
+  const gender = String(body.gender ?? "").trim() || null;
+  
   if (!fullName || !email)
     return NextResponse.json(
       { error: "Name and email are required" },
@@ -93,13 +96,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: profileError.message }, { status: 400 });
   }
 
+  const teacherId = crypto.randomUUID();
   const { data: teacher, error: teacherError } = await admin
     .from("teachers")
     .insert({
-      id: crypto.randomUUID(),
+      id: teacherId,
       profile_id: authData.user.id,
       phone: body.phone || null,
       temporary_password: temporaryPassword,
+      ...(gender && { gender }),
     })
     .select("id, profile_id, phone, temporary_password, created_at")
     .single();
@@ -107,6 +112,31 @@ export async function POST(request: Request) {
     await admin.auth.admin.deleteUser(authData.user.id);
     return NextResponse.json({ error: teacherError.message }, { status: 400 });
   }
+
+  // Create class_subjects entries for assigned classes and subjects
+  const assignments = body.assignments ?? [];
+  const classSubjectAssignments = assignments.map((assignment: any) => ({
+    class_id: assignment.classId,
+    subject_id: assignment.subjectId,
+    teacher_id: teacherId,
+  }));
+
+  if (classSubjectAssignments.length > 0) {
+    const { error: assignmentError } = await admin
+      .from("class_subjects")
+      .insert(classSubjectAssignments);
+
+    if (assignmentError) {
+      console.error("Warning: Failed to create assignments:", assignmentError);
+      // Don't fail the entire creation if assignments fail
+    }
+  }
+
+  // Get unique classes for class count
+  const uniqueClassIds = new Set(assignments.map((a: any) => a.classId));
+  const subjectNames = new Set(
+    assignments.map((a: any) => a.subjectName).filter(Boolean),
+  );
 
   return NextResponse.json({
     id: teacher.id,
@@ -118,8 +148,8 @@ export async function POST(request: Request) {
       email,
       role: "teacher",
     },
-    subjects: [],
-    classCount: 0,
+    subjects: Array.from(subjectNames),
+    classCount: uniqueClassIds.size,
     phone: teacher.phone ?? "",
     temporaryPassword,
   });

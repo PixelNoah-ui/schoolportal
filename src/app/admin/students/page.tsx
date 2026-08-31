@@ -12,12 +12,18 @@ import {
   EntityFormDialog,
   type FieldConfig,
 } from "@/components/admin/entity-form-dialog";
-import { GradeBadge } from "@/components/admin/grade-badge";
 import { TableSkeleton } from "@/components/admin/table-skeleton";
 import { EntityEmptyState } from "@/components/admin/entity-empty-state";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import PaginationBar from "@/components/PaginationBar";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -26,8 +32,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { classes } from "@/lib/mock-data";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useAcademicYears } from "@/hooks/use-academic-years";
+import { useClassOptions } from "@/hooks/use-classes";
+import { useGradeOptions } from "@/hooks/use-grades";
 import {
   useStudents,
   useCreateStudent,
@@ -43,33 +51,121 @@ function initials(name: string) {
     .join("");
 }
 
-const studentFields: FieldConfig[] = [
-  { name: "full_name", label: "Full name" },
-  { name: "email", label: "Email", type: "email" },
-  { name: "phone", label: "Phone" },
-  { name: "dob", label: "Date of birth", type: "date" },
-];
-
 export default function StudentsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const search = searchParams.get("search") ?? "";
   const [searchInput, setSearchInput] = useState(search);
+  const [notification, setNotification] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
   const debouncedSearch = useDebouncedValue(searchInput);
   const classFilter = searchParams.get("class") ?? "all";
+  const { data: academicYears = [] } = useAcademicYears();
+  const { data: gradeOptions = [] } = useGradeOptions();
+  const currentAcademicYearId =
+    academicYears.find((year) => year.isCurrent)?.id ?? "all";
+  const yearFilter = searchParams.get("year") ?? currentAcademicYearId;
   const currentPage = Math.max(1, Number(searchParams.get("page") ?? "1"));
   const [addOpen, setAddOpen] = useState(false);
+
+  const studentFields: FieldConfig[] = [
+    { name: "full_name", label: "Full name" },
+    { name: "email", label: "Email", type: "email" },
+    { name: "phone", label: "Phone" },
+    { name: "dob", label: "Date of birth", type: "date" },
+    {
+      name: "grade_id",
+      label: "Grade",
+      type: "select",
+      options: gradeOptions.map((grade: { id: string; name: string }) => ({
+        label: grade.name,
+        value: grade.id,
+      })),
+    },
+  ];
 
   const { data, isLoading } = useStudents({
     search: debouncedSearch,
     classId: classFilter,
+    academicYearId: yearFilter,
     page: currentPage,
+  });
+  const { data: filteredClassOptions = [] } = useClassOptions({
+    academicYearId: yearFilter === "all" ? undefined : yearFilter,
   });
   const createStudent = useCreateStudent();
   const updateStudent = useUpdateStudent();
   const deleteStudent = useDeleteStudent();
 
-  const hasFilters = Boolean(search) || classFilter !== "all";
+  // Auto-hide notification after 3 seconds
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => setNotification(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
+
+  const handleCreateStudent = async (values: Record<string, string>) => {
+    try {
+      await createStudent.mutateAsync({
+        ...values,
+        grade_id: values.grade_id || "",
+      });
+      setAddOpen(false);
+      setNotification({
+        type: "success",
+        message: "Student created successfully!",
+      });
+    } catch (error) {
+      setNotification({
+        type: "error",
+        message:
+          error instanceof Error ? error.message : "Failed to create student",
+      });
+    }
+  };
+
+  const handleUpdateStudent = async (
+    id: string,
+    values: Record<string, string>,
+  ) => {
+    try {
+      await updateStudent.mutateAsync({ id, payload: values });
+      setNotification({
+        type: "success",
+        message: "Student updated successfully!",
+      });
+    } catch (error) {
+      setNotification({
+        type: "error",
+        message:
+          error instanceof Error ? error.message : "Failed to update student",
+      });
+    }
+  };
+
+  const handleDeleteStudent = async (id: string) => {
+    try {
+      await deleteStudent.mutateAsync(id);
+      setNotification({
+        type: "success",
+        message: "Student deleted successfully!",
+      });
+    } catch (error) {
+      setNotification({
+        type: "error",
+        message:
+          error instanceof Error ? error.message : "Failed to delete student",
+      });
+    }
+  };
+
+  const hasFilters =
+    Boolean(search) ||
+    classFilter !== "all" ||
+    (yearFilter !== "all" && yearFilter !== currentAcademicYearId);
   const isEmpty = !isLoading && (data?.students.length ?? 0) === 0;
 
   const updateQuery = useCallback(
@@ -88,14 +184,40 @@ export default function StudentsPage() {
     updateQuery("search", debouncedSearch);
   }, [debouncedSearch, search, updateQuery]);
 
+  useEffect(() => {
+    if (!searchParams.get("year") && currentAcademicYearId !== "all") {
+      const next = new URLSearchParams(searchParams);
+      next.set("year", currentAcademicYearId);
+      router.replace(`?${next.toString()}`);
+    }
+  }, [currentAcademicYearId, router, searchParams]);
+
   function clearFilters() {
     setSearchInput("");
-    router.push("?");
+    const next = new URLSearchParams(searchParams);
+    next.delete("search");
+    next.delete("class");
+    next.delete("page");
+    if (currentAcademicYearId !== "all")
+      next.set("year", currentAcademicYearId);
+    router.replace(`?${next.toString()}`);
   }
 
   return (
     <>
       <SiteHeader title="Students" />
+
+      {/* Notification Toast */}
+      {notification && (
+        <div
+          className={`fixed top-4 right-4 px-4 py-3 rounded-lg shadow-lg text-white z-50 animate-in fade-in slide-in-from-top-2 duration-300 ${
+            notification.type === "success" ? "bg-green-500" : "bg-red-500"
+          }`}
+        >
+          {notification.message}
+        </div>
+      )}
+
       <div className="flex flex-1 flex-col gap-5 p-6">
         <div className="flex items-center justify-between">
           <PageHeader eyebrow="All Students" count={data?.totalPages} />
@@ -106,7 +228,7 @@ export default function StudentsPage() {
             fields={studentFields}
             open={addOpen}
             onOpenChange={setAddOpen}
-            onSubmit={(values) => createStudent.mutateAsync(values)}
+            onSubmit={handleCreateStudent}
             isLoading={createStudent.isPending}
             trigger={
               <Button className="rounded-none">
@@ -116,97 +238,124 @@ export default function StudentsPage() {
           />
         </div>
 
-        <DataToolbar
-          searchValue={searchInput}
-          onSearchChange={setSearchInput}
-          searchPlaceholder="Search by name or username"
-          filterOptions={classes.map((c) => ({
-            label: `Grade ${c.grade} - ${c.section}`,
-            value: c.id,
-          }))}
-          filterValue={classFilter}
-          onFilterChange={(value) => updateQuery("class", value)}
-          filterLabel="All Classes"
-        />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <DataToolbar
+            searchValue={searchInput}
+            onSearchChange={setSearchInput}
+            searchPlaceholder="Search by name or username"
+            filterOptions={filteredClassOptions.map((c) => ({
+              label: `Grade ${c.grade} - ${c.section || "Unassigned"}`,
+              value: c.id,
+            }))}
+            filterValue={classFilter}
+            onFilterChange={(value) => updateQuery("class", value)}
+            filterLabel="All Classes"
+          />
+          <Select
+            value={yearFilter === "all" ? "all" : yearFilter}
+            onValueChange={(value) => updateQuery("year", value ?? "all")}
+          >
+            <SelectTrigger className="w-full rounded-none sm:w-52">
+              <SelectValue placeholder="Academic year" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All academic years</SelectItem>
+              {academicYears.map((year) => (
+                <SelectItem key={year.id} value={year.id}>
+                  {year.name}
+                  {year.isCurrent ? " (Current)" : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <TableHead>Student</TableHead>
               <TableHead>Username</TableHead>
-              <TableHead>Temporary Password</TableHead>
+              <TableHead>Password</TableHead>
+              <TableHead>Grade</TableHead>
               <TableHead>Class</TableHead>
               <TableHead>Phone</TableHead>
               <TableHead>Date of Birth</TableHead>
-              <TableHead>Avg. Score</TableHead>
               <TableHead className="w-28 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
 
           {isLoading ? (
-            <TableSkeleton rows={6} columns={7} />
+            <TableSkeleton rows={6} columns={8} />
           ) : (
             <TableBody>
-              {data?.students.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar className="size-8 rounded-none">
-                        <AvatarFallback className="rounded-none bg-secondary text-xs">
-                          {initials(s.profile.full_name)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium">
-                          {s.profile.full_name}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {s.profile.email}
-                        </span>
+              {data?.students.map((s) => {
+                const fullName = s.profile?.full_name ?? "Unknown student";
+                const email = s.profile?.email ?? "-";
+                const username = s.profile?.username ?? "-";
+                const gradeId =
+                  ((s as unknown as Record<string, unknown>)
+                    .gradeId as string) || "";
+                const classParts = (s.className || "").split(" - ");
+                const gradeLabel = classParts[0] || s.className || "Unassigned";
+                const classLabel = classParts[1] || "-";
+
+                return (
+                  <TableRow key={s.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar className="size-8 rounded-none">
+                          <AvatarFallback className="rounded-none bg-secondary text-xs">
+                            {initials(fullName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium">
+                            {fullName}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {email}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">
-                    {s.profile.username}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">
-                    {s.temporaryPassword ?? "-"}
-                  </TableCell>
-                  <TableCell className="text-sm">{s.className}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {s.phone}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {s.dob}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm tabular-nums">
-                        {s.avgScore.toFixed(1)}
-                      </span>
-                      <GradeBadge score={s.avgScore} />
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <RowActions
-                      entityName={s.profile.full_name}
-                      fields={studentFields}
-                      values={{
-                        full_name: s.profile.full_name,
-                        email: s.profile.email,
-                        phone: s.phone,
-                        dob: s.dob,
-                      }}
-                      onEdit={(values) =>
-                        updateStudent.mutateAsync({ id: s.id, payload: values })
-                      }
-                      onDelete={() => deleteStudent.mutateAsync(s.id)}
-                      editIsLoading={updateStudent.isPending}
-                      deleteIsLoading={deleteStudent.isPending}
-                    />
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {username}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {s.temporaryPassword ?? "-"}
+                    </TableCell>
+                    <TableCell className="text-sm font-medium text-blue-600">
+                      {gradeLabel}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {classLabel}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {s.phone || "Not provided"}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {s.dob || "-"}
+                    </TableCell>
+                    <TableCell>
+                      <RowActions
+                        entityName={fullName}
+                        fields={studentFields}
+                        values={{
+                          full_name: fullName,
+                          email: email === "-" ? "" : email,
+                          phone: s.phone,
+                          dob: s.dob,
+                          grade_id: gradeId,
+                        }}
+                        onEdit={(values) => handleUpdateStudent(s.id, values)}
+                        onDelete={() => handleDeleteStudent(s.id)}
+                        editIsLoading={updateStudent.isPending}
+                        deleteIsLoading={deleteStudent.isPending}
+                      />
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           )}
         </Table>
@@ -218,7 +367,7 @@ export default function StudentsPage() {
             hasFilters={hasFilters}
             onClearFilters={hasFilters ? clearFilters : undefined}
             onAdd={!hasFilters ? () => setAddOpen(true) : undefined}
-            description="Once you enroll students, they'll show up here with their class, contact details, and average score."
+            description="Once you enroll students, they'll show up here with their class and contact details."
           />
         )}
 

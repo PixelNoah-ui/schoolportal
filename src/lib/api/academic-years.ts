@@ -67,14 +67,26 @@ export async function fetchAcademicYears(): Promise<AcademicYearRow[]> {
   return (data ?? []).map((row) => mapAcademicYear(row as AcademicYearRecord));
 }
 
+function generateAcademicYearName(
+  startDate: string | null,
+  endDate: string | null,
+) {
+  if (!startDate || !endDate) return "Academic year";
+
+  const startYear = new Date(startDate).getFullYear();
+  const endYear = new Date(endDate).getFullYear();
+
+  return `${startYear}/${endYear}`;
+}
+
 export async function createAcademicYear(payload: Record<string, string>) {
   const supabase = createClient();
-  const name = payload.name?.trim();
-  if (!name) throw new Error("Academic year name is required.");
-
   const startDate = payload.start_date || null;
   const endDate = payload.end_date || null;
   validateAcademicYearDates(startDate, endDate);
+
+  const name =
+    (payload.name ?? "").trim() || generateAcademicYearName(startDate, endDate);
 
   const { data: activeYear, error: activeYearError } = await supabase
     .from("academic_years")
@@ -84,18 +96,14 @@ export async function createAcademicYear(payload: Record<string, string>) {
 
   if (activeYearError) throw new Error(activeYearError.message);
 
-  if (payload.is_current === "true" && activeYear) {
-    throw new Error("Only one academic year can be active at a time.");
-  }
-
   const { data, error } = await supabase
     .from("academic_years")
     .insert({
       name,
       start_date: startDate,
       end_date: endDate,
-      is_current: Boolean(payload.is_current === "true"),
-      status: payload.is_current === "true" ? "active" : "draft",
+      is_current: true,
+      status: "active",
     })
     .select(
       "id, name, start_date, end_date, is_current, status, created_at, semesters(id, name, status)",
@@ -103,6 +111,15 @@ export async function createAcademicYear(payload: Record<string, string>) {
     .single();
 
   if (error) throw new Error(error.message);
+
+  if (activeYear && activeYear.id !== data.id) {
+    const { error: deactivateError } = await supabase
+      .from("academic_years")
+      .update({ is_current: false, status: "draft" })
+      .eq("id", activeYear.id);
+
+    if (deactivateError) throw new Error(deactivateError.message);
+  }
 
   const academicYear = data as AcademicYearRecord;
   const semestersInput = payload.semesters ? JSON.parse(payload.semesters) : [];
@@ -241,16 +258,13 @@ export async function completeAcademicYear(id: string) {
 export async function deleteAcademicYear(id: string) {
   const supabase = createClient();
 
-  const [{ data: semesters }, { data: classes }] = await Promise.all([
-    supabase.from("semesters").select("id").eq("academic_year_id", id),
-    supabase.from("classes").select("id").eq("academic_year_id", id),
+  const [{ error: semesterError }, { error: classError }] = await Promise.all([
+    supabase.from("semesters").delete().eq("academic_year_id", id),
+    supabase.from("classes").delete().eq("academic_year_id", id),
   ]);
 
-  if ((semesters ?? []).length > 0 || (classes ?? []).length > 0) {
-    throw new Error(
-      "Cannot delete this academic year because it contains semester or class records.",
-    );
-  }
+  if (semesterError) throw new Error(semesterError.message);
+  if (classError) throw new Error(classError.message);
 
   const { error } = await supabase.from("academic_years").delete().eq("id", id);
   if (error) throw new Error(error.message);
