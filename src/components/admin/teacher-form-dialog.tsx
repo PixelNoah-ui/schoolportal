@@ -22,7 +22,7 @@ interface TeacherFormDialogProps {
   mode: "add" | "edit";
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  onSubmit: (values: any) => Promise<unknown> | unknown;
+  onSubmit: (values: TeacherFormValues) => Promise<unknown> | unknown;
   isLoading?: boolean;
   trigger?: React.ReactElement;
 }
@@ -42,6 +42,14 @@ interface ClassOption {
 interface TeacherAssignment {
   subjectId: string;
   classId: string;
+}
+
+interface TeacherFormValues {
+  full_name: string;
+  email: string;
+  phone: string;
+  gender: string;
+  assignments: TeacherAssignment[];
 }
 
 export function TeacherFormDialog({
@@ -158,12 +166,12 @@ export function TeacherFormDialog({
       return;
     }
 
-    const payload = {
+    const payload: TeacherFormValues = {
       full_name: fullName,
       email,
       phone,
       gender,
-      assignments: assignments,
+      assignments,
     };
 
     await Promise.resolve(onSubmit(payload));
@@ -319,7 +327,10 @@ export function TeacherFormDialog({
                     </div>
                   ) : (
                     classes.map((classItem) => (
-                      <div key={classItem.id} className="flex items-center gap-2">
+                      <div
+                        key={classItem.id}
+                        className="flex items-center gap-2"
+                      >
                         <input
                           type="checkbox"
                           id={`class-${classItem.id}`}
@@ -332,7 +343,8 @@ export function TeacherFormDialog({
                           className="cursor-pointer text-sm"
                         >
                           Grade {classItem.grade}
-                          {classItem.section && ` - Section ${classItem.section}`}
+                          {classItem.section &&
+                            ` - Section ${classItem.section}`}
                         </label>
                       </div>
                     ))

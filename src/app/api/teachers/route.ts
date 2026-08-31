@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     .toLowerCase();
   const phone = String(body.phone ?? "").trim() || null;
   const gender = String(body.gender ?? "").trim() || null;
-  
+
   if (!fullName || !email)
     return NextResponse.json(
       { error: "Name and email are required" },
