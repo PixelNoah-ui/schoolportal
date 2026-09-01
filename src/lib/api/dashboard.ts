@@ -2,10 +2,12 @@ import { createClient } from "@/utils/supabase/client";
 import type {
   AllStudentRow,
   ClassRow,
+  DashboardData,
   PaymentRow,
   Profile,
   SubjectRow,
-} from "@/lib/mock-data";
+} from "@/utils/types/dashboard";
+import { fetchStudents } from "@/lib/api/students";
 
 type ProfileRow = Pick<
   Profile,
@@ -18,6 +20,7 @@ type StudentRecord = {
   class_id: string | null;
   phone: string | null;
   date_of_birth: string | null;
+  temporary_password: string | null;
   created_at: string;
   profiles: ProfileRow[];
   classes: {
@@ -88,22 +91,6 @@ function resolveStudentDisplayName(
   return fallback;
 }
 
-export interface DashboardData {
-  academicYear: string;
-  semester: string;
-  students: AllStudentRow[];
-  classes: ClassRow[];
-  subjects: SubjectRow[];
-  payments: PaymentRow[];
-  stats: {
-    totalStudents: number;
-    totalTeachers: number;
-    totalClasses: number;
-    avgScore: number;
-  };
-  enrollmentByGrade: { grade: string; count: number }[];
-}
-
 async function query<T>(
   request: PromiseLike<{ data: T | null; error: { message: string } | null }>,
 ) {
@@ -114,8 +101,10 @@ async function query<T>(
 
 export async function fetchDashboard(): Promise<DashboardData> {
   const supabase = createClient();
+  const dashboardStudents = await fetchStudents({ pageSize: 200 });
+  const students = dashboardStudents.students;
+
   const [
-    students,
     teachers,
     classes,
     subjects,
@@ -125,15 +114,7 @@ export async function fetchDashboard(): Promise<DashboardData> {
     semesters,
     payments,
   ] = await Promise.all([
-    query<StudentRecord[]>(
-      supabase
-        .from("students")
-        .select(
-          "id, profile_id, class_id, phone, date_of_birth, created_at, profiles!students_profile_id_fkey(id, full_name, username, email, role), classes(id, name, grade, section)",
-        )
-        .order("created_at", { ascending: false }),
-    ),
-    query<TeacherRecord[]>(
+    query<TeacherRecord>(
       supabase
         .from("teachers")
         .select(
@@ -180,14 +161,12 @@ export async function fetchDashboard(): Promise<DashboardData> {
   const teachersById = new Map(teachers.map((row) => [row.id, row.profile_id]));
   const profilesById = new Map(
     [
-      ...students.map(
-        (row) => [row.profile_id, row.profiles?.[0] ?? null] as const,
-      ),
       ...teachers.map(
         (row) => [row.profile_id, row.profiles?.[0] ?? null] as const,
       ),
     ].filter(([, profile]) => profile !== null),
   );
+
   const scoresBySubject = new Map<string, number[]>();
   grades.forEach((grade) => {
     const classSubject = classSubjects.find(
@@ -199,37 +178,14 @@ export async function fetchDashboard(): Promise<DashboardData> {
     scoresBySubject.set(classSubject.subject_id, scores);
   });
 
-  const mappedStudents: AllStudentRow[] = students.map((student) => {
-    const profile = student.profiles?.[0] ?? null;
-    const resolvedName = resolveStudentDisplayName(profile, "Unknown student");
-    const safeProfile = {
-      id: profile?.id ?? student.profile_id,
-      full_name: resolvedName,
-      username: profile?.username ?? "-",
-      email: profile?.email ?? "-",
-      role: "student" as const,
-    };
-    const classRow = student.classes?.[0];
+  const mappedStudents: AllStudentRow[] = students;
 
-    return {
-      id: student.id,
-      student_number: student.id.slice(0, 8).toUpperCase(),
-      profile: safeProfile,
-      className: classRow
-        ? `Grade ${classRow.grade} - ${classRow.section ?? ""}`
-        : "Unassigned",
-      avgScore: 0,
-      joined: new Date(student.created_at).toLocaleDateString(),
-      phone: student.phone ?? "Not provided",
-      dob: student.date_of_birth ?? "",
-      classId: student.class_id ?? "",
-    };
-  });
-
+  // NOTE: homeroom teacher isn't joined in the current `classes` select, so
+  // this stays "Unassigned" until that relation is added to the query.
   const mappedClasses: ClassRow[] = classes.map((classRow) => ({
     ...classRow,
     section: classRow.section ?? "",
-    studentCount: students.filter((student) => student.class_id === classRow.id)
+    studentCount: students.filter((student) => student.classId === classRow.id)
       .length,
     teacher: "Unassigned",
   }));
@@ -266,6 +222,7 @@ export async function fetchDashboard(): Promise<DashboardData> {
   const currentSemester = currentYear
     ? semesters.find((semester) => semester.academic_year_id === currentYear.id)
     : undefined;
+
   const enrollment = new Map<number, number>();
   mappedClasses.forEach((classRow) =>
     enrollment.set(
@@ -273,7 +230,31 @@ export async function fetchDashboard(): Promise<DashboardData> {
       (enrollment.get(classRow.grade) ?? 0) + classRow.studentCount,
     ),
   );
+
   const scores = grades.map((grade) => Number(grade.score));
+
+  const mappedPayments: PaymentRow[] = payments.map((payment) => {
+    const studentRecord = students.find((row) => row.id === payment.student_id);
+    const className = studentRecord?.className ?? "Unassigned";
+    const studentProfile = payment.students?.[0]?.profiles?.[0];
+
+    return {
+      id: payment.id,
+      studentId: payment.student_id,
+      studentName: resolveStudentDisplayName(studentProfile, "Unknown student"),
+      studentNumber: studentRecord?.student_number ?? "",
+      classId: studentRecord?.classId ?? "",
+      className,
+      amount: Number(payment.amount),
+      paymentMonth: payment.payment_month,
+      status: payment.status,
+      paymentMethod: payment.payment_method ?? "other",
+      submittedAt: payment.submitted_at ?? "",
+      screenshotUrl:
+        "https://placehold.co/500x900/e3f2fd/1565c0?text=Payment+Receipt",
+      note: payment.note ?? undefined,
+    };
+  });
 
   return {
     academicYear: currentYear?.name ?? "No academic year",
@@ -281,36 +262,7 @@ export async function fetchDashboard(): Promise<DashboardData> {
     students: mappedStudents,
     classes: mappedClasses,
     subjects: mappedSubjects.sort((a, b) => b.avgScore - a.avgScore),
-    payments: payments.map((payment) => {
-      const studentRecord = students.find(
-        (row) => row.id === payment.student_id,
-      );
-      const classRow = studentRecord?.classes?.[0];
-      const className = classRow
-        ? `Grade ${classRow.grade} - ${classRow.section ?? ""}`
-        : "Unassigned";
-      const studentProfile = payment.students?.[0]?.profiles?.[0];
-
-      return {
-        id: payment.id,
-        studentId: payment.student_id,
-        studentName: resolveStudentDisplayName(
-          studentProfile,
-          "Unknown student",
-        ),
-        studentNumber: "",
-        classId: studentRecord?.class_id ?? "",
-        className,
-        amount: Number(payment.amount),
-        paymentMonth: payment.payment_month,
-        status: payment.status,
-        paymentMethod: payment.payment_method ?? "other",
-        submittedAt: payment.submitted_at ?? "",
-        screenshotUrl:
-          "https://placehold.co/500x900/e3f2fd/1565c0?text=Payment+Receipt",
-        note: payment.note ?? undefined,
-      };
-    }),
+    payments: mappedPayments,
     stats: {
       totalStudents: students.length,
       totalTeachers: teachers.length,
@@ -319,9 +271,11 @@ export async function fetchDashboard(): Promise<DashboardData> {
         ? scores.reduce((total, score) => total + score, 0) / scores.length
         : 0,
     },
-    enrollmentByGrade: [...enrollment.entries()].map(([grade, count]) => ({
-      grade: `Grade ${grade}`,
-      count,
-    })),
+    enrollmentByGrade: [...enrollment.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([grade, count]) => ({
+        grade: `Grade ${grade}`,
+        count,
+      })),
   };
 }

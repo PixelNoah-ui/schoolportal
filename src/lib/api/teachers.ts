@@ -78,7 +78,7 @@ export async function fetchTeachers({
   };
 }
 
-export async function createTeacher(payload: Record<string, string>) {
+export async function createTeacher(payload: Record<string, unknown>) {
   const response = await fetch("/api/teachers", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -91,7 +91,7 @@ export async function createTeacher(payload: Record<string, string>) {
 
 export async function updateTeacher(
   id: string,
-  payload: Record<string, string>,
+  payload: Record<string, unknown>,
 ) {
   const supabase = createClient();
   const { error } = await supabase

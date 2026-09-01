@@ -8,6 +8,7 @@ import { SiteHeader } from "@/components/admin/site-header";
 import { PageHeader } from "@/components/admin/page-header";
 import { DataToolbar } from "@/components/admin/data-toolbar";
 import { RowActions } from "@/components/admin/row-actions";
+import { PasswordCell } from "@/components/admin/password-cell";
 import {
   EntityFormDialog,
   type FieldConfig,
@@ -66,7 +67,14 @@ export default function StudentsPage() {
   const { data: gradeOptions = [] } = useGradeOptions();
   const currentAcademicYearId =
     academicYears.find((year) => year.isCurrent)?.id ?? "all";
-  const yearFilter = searchParams.get("year") ?? currentAcademicYearId;
+  const currentAcademicYearName =
+    academicYears.find((year) => year.isCurrent)?.name ?? "all";
+  const yearFilter = searchParams.get("year") ?? currentAcademicYearName;
+  const selectedAcademicYearId =
+    yearFilter === "all"
+      ? "all"
+      : (academicYears.find((year) => year.name === yearFilter)?.id ??
+        currentAcademicYearId);
   const currentPage = Math.max(1, Number(searchParams.get("page") ?? "1"));
   const [addOpen, setAddOpen] = useState(false);
 
@@ -89,11 +97,12 @@ export default function StudentsPage() {
   const { data, isLoading } = useStudents({
     search: debouncedSearch,
     classId: classFilter,
-    academicYearId: yearFilter,
+    academicYearId: selectedAcademicYearId,
     page: currentPage,
   });
   const { data: filteredClassOptions = [] } = useClassOptions({
-    academicYearId: yearFilter === "all" ? undefined : yearFilter,
+    academicYearId:
+      selectedAcademicYearId === "all" ? undefined : selectedAcademicYearId,
   });
   const createStudent = useCreateStudent();
   const updateStudent = useUpdateStudent();
@@ -165,7 +174,7 @@ export default function StudentsPage() {
   const hasFilters =
     Boolean(search) ||
     classFilter !== "all" ||
-    (yearFilter !== "all" && yearFilter !== currentAcademicYearId);
+    (yearFilter !== "all" && yearFilter !== currentAcademicYearName);
   const isEmpty = !isLoading && (data?.students.length ?? 0) === 0;
 
   const updateQuery = useCallback(
@@ -185,12 +194,12 @@ export default function StudentsPage() {
   }, [debouncedSearch, search, updateQuery]);
 
   useEffect(() => {
-    if (!searchParams.get("year") && currentAcademicYearId !== "all") {
+    if (!searchParams.get("year") && currentAcademicYearName !== "all") {
       const next = new URLSearchParams(searchParams);
-      next.set("year", currentAcademicYearId);
+      next.set("year", currentAcademicYearName);
       router.replace(`?${next.toString()}`);
     }
-  }, [currentAcademicYearId, router, searchParams]);
+  }, [currentAcademicYearName, router, searchParams]);
 
   function clearFilters() {
     setSearchInput("");
@@ -198,8 +207,8 @@ export default function StudentsPage() {
     next.delete("search");
     next.delete("class");
     next.delete("page");
-    if (currentAcademicYearId !== "all")
-      next.set("year", currentAcademicYearId);
+    if (currentAcademicYearName !== "all")
+      next.set("year", currentAcademicYearName);
     router.replace(`?${next.toString()}`);
   }
 
@@ -261,7 +270,7 @@ export default function StudentsPage() {
             <SelectContent>
               <SelectItem value="all">All academic years</SelectItem>
               {academicYears.map((year) => (
-                <SelectItem key={year.id} value={year.id}>
+                <SelectItem key={year.id} value={year.name}>
                   {year.name}
                   {year.isCurrent ? " (Current)" : ""}
                 </SelectItem>
@@ -322,7 +331,7 @@ export default function StudentsPage() {
                       {username}
                     </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">
-                      {s.temporaryPassword ?? "-"}
+                      <PasswordCell value={s.temporaryPassword} />
                     </TableCell>
                     <TableCell className="text-sm font-medium text-blue-600">
                       {gradeLabel}

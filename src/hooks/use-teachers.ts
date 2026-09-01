@@ -17,10 +17,19 @@ export function useTeachers(params: TeacherListParams = {}) {
   });
 }
 
+type TeacherMutationPayload = {
+  full_name?: string;
+  email?: string;
+  phone?: string;
+  gender?: string;
+  assignments?: Array<{ subjectId: string; classId: string }>;
+  [key: string]: unknown;
+};
+
 export function useCreateTeacher() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: Record<string, string>) => createTeacher(payload),
+    mutationFn: (payload: TeacherMutationPayload) => createTeacher(payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: teachersKey }),
   });
 }
@@ -33,7 +42,7 @@ export function useUpdateTeacher() {
       payload,
     }: {
       id: string;
-      payload: Record<string, string>;
+      payload: TeacherMutationPayload;
     }) => updateTeacher(id, payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: teachersKey }),
   });

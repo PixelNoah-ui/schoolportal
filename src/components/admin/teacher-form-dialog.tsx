@@ -15,7 +15,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/utils/supabase/client";
 
 interface TeacherFormDialogProps {
@@ -44,13 +43,13 @@ interface TeacherAssignment {
   classId: string;
 }
 
-interface TeacherFormValues {
+type TeacherFormValues = Record<string, unknown> & {
   full_name: string;
   email: string;
   phone: string;
   gender: string;
   assignments: TeacherAssignment[];
-}
+};
 
 export function TeacherFormDialog({
   mode,
@@ -60,6 +59,8 @@ export function TeacherFormDialog({
   isLoading = false,
   trigger,
 }: TeacherFormDialogProps) {
+  void mode;
+
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
@@ -87,7 +88,7 @@ export function TeacherFormDialog({
     if (open && subjects.length === 0) {
       loadSubjectsAndClasses();
     }
-  }, [open]);
+  }, [open, subjects.length]);
 
   async function loadSubjectsAndClasses() {
     setLoadingOptions(true);

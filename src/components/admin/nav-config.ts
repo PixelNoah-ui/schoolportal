@@ -9,7 +9,6 @@ import {
   Trophy,
   CreditCard,
   CalendarClock,
-  FileText,
   BriefcaseBusiness,
   type LucideIcon,
 } from "lucide-react";
@@ -35,7 +34,6 @@ export const adminNavMain: NavItem[] = [
   },
   { title: "Ranking", url: "/admin/rankings", icon: Trophy },
   { title: "Payments", url: "/admin/payments", icon: CreditCard },
-  { title: "Reports", url: "/admin/reports", icon: FileText },
 ];
 
 export const adminNavFooter: NavItem[] = [

@@ -1,4 +1,3 @@
-// app/admin/page.tsx
 "use client";
 
 import {
@@ -8,6 +7,8 @@ import {
   TrendingUp,
   Users,
   WalletCards,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { SiteHeader } from "@/components/admin/site-header";
 import { StatCard } from "@/components/admin/stat-card";
@@ -20,7 +21,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table } from "@/components/ui/table";
 import { useDashboard } from "@/hooks/use-dashboard";
 import { DashboardEmptyState } from "@/components/admin/dashboard-empty-state";
-import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function AdminDashboardPage() {
@@ -58,7 +58,7 @@ export default function AdminDashboardPage() {
     const message =
       error instanceof Error && error.message
         ? error.message.toLowerCase().includes("cannot read properties")
-          ? "We couldn’t load the dashboard right now. Please try again in a moment."
+          ? "We couldn't load the dashboard right now. Please try again in a moment."
           : "Something went wrong while loading the dashboard. Please try again."
         : "Something went wrong while loading the dashboard. Please try again.";
 
@@ -66,9 +66,9 @@ export default function AdminDashboardPage() {
       <>
         <SiteHeader title="Dashboard" />
         <div className="flex flex-1 items-center justify-center p-6">
-          <Card className="w-full max-w-lg rounded-2xl border border-border bg-card shadow-none">
+          <Card className="w-full max-w-lg rounded-none border-border shadow-none">
             <CardContent className="flex flex-col items-center gap-4 p-8 text-center">
-              <div className="flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+              <div className="flex size-12 items-center justify-center bg-destructive/10 text-destructive">
                 <AlertTriangle className="size-5" />
               </div>
               <div className="space-y-1">
@@ -83,7 +83,7 @@ export default function AdminDashboardPage() {
                 type="button"
                 variant="outline"
                 onClick={() => refetch()}
-                className="rounded-xl"
+                className="rounded-none"
               >
                 <RefreshCw className="size-4" />
                 Try again
@@ -112,18 +112,15 @@ export default function AdminDashboardPage() {
     );
   }
 
-  const approvedPayments = data.payments.filter(
-    (payment) => payment.status === "approved",
-  );
-  const pendingPayments = data.payments.filter(
-    (payment) => payment.status === "pending",
-  );
+  const approvedPayments = data.payments.filter((p) => p.status === "approved");
+  const pendingPayments = data.payments.filter((p) => p.status === "pending");
 
   return (
     <>
       <SiteHeader title="Dashboard" />
       <div className="flex flex-1 flex-col gap-6 p-6">
-        <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-semibold">Overview</h1>
           <p className="text-sm text-muted-foreground">
             {data.academicYear} · {data.semester}
           </p>
@@ -135,24 +132,28 @@ export default function AdminDashboardPage() {
             value={data.stats.totalStudents}
             delta="from current records"
             icon={GraduationCap}
+            tone="blue"
           />
           <StatCard
             label="Total Teachers"
             value={data.stats.totalTeachers}
             delta="from current records"
             icon={Users}
+            tone="violet"
           />
           <StatCard
             label="Total Classes"
             value={data.stats.totalClasses}
             delta="from current records"
             icon={Layers}
+            tone="amber"
           />
           <StatCard
             label="Average Score"
             value={`${data.stats.avgScore.toFixed(1)}%`}
             delta="current average"
             icon={TrendingUp}
+            tone="emerald"
           />
         </div>
 
@@ -162,20 +163,21 @@ export default function AdminDashboardPage() {
             value={`${approvedPayments.length}`}
             delta="approved payments"
             icon={TrendingUp}
+            tone="emerald"
           />
           <StatCard
             label="Pending Payments"
             value={`${pendingPayments.length}`}
             delta="need review"
             icon={ClipboardList}
+            tone="amber"
           />
           <StatCard
             label="Collected This Month"
-            value={`${approvedPayments
-              .reduce((total, payment) => total + payment.amount, 0)
-              .toLocaleString()} ETB`}
+            value={`${approvedPayments.reduce((t, p) => t + p.amount, 0).toLocaleString()} ETB`}
             delta="approved total"
             icon={WalletCards}
+            tone="blue"
           />
         </div>
 
@@ -190,22 +192,28 @@ export default function AdminDashboardPage() {
               </span>
             </CardHeader>
             <CardContent className="divide-y p-0">
-              {data.subjects.slice(0, 4).map((sub) => (
-                <div
-                  key={sub.id}
-                  className="flex items-center justify-between px-4 py-3"
-                >
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium">{sub.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {sub.className}
+              {data.subjects.length === 0 ? (
+                <p className="p-4 text-sm text-muted-foreground">
+                  No subject scores yet.
+                </p>
+              ) : (
+                data.subjects.slice(0, 4).map((sub) => (
+                  <div
+                    key={sub.id}
+                    className="flex items-center justify-between px-4 py-3"
+                  >
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">{sub.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {sub.className}
+                      </span>
+                    </div>
+                    <span className="text-sm font-semibold tabular-nums">
+                      {sub.avgScore.toFixed(1)}%
                     </span>
                   </div>
-                  <span className="text-sm font-semibold tabular-nums">
-                    {sub.avgScore}%
-                  </span>
-                </div>
-              ))}
+                ))
+              )}
             </CardContent>
           </Card>
         </div>
