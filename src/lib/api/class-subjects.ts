@@ -15,6 +15,8 @@ export interface ClassSubjectListResult {
   className: string;
   grade: number | null;
   section: string | null;
+  homeroomTeacherId: string | null;
+  homeroomTeacherName: string | null;
   classSubjects: ClassSubjectRow[];
 }
 
@@ -71,7 +73,7 @@ export async function fetchClassSubjects({
   const { data, error } = await supabase
     .from("class_subjects")
     .select(
-      "id, class_id, subject_id, teacher_id, classes(id, name, grade, section), subjects(id, name), teachers(id, profiles(full_name))",
+      "id, class_id, subject_id, teacher_id, classes(id, name, grade, section, homeroom_teacher:teachers!classes_homeroom_teacher_id_fkey(id, profiles(full_name))), subjects(id, name), teachers(id, profiles(full_name))",
     )
     .eq("class_id", classId)
     .order("created_at", { ascending: true });
@@ -79,6 +81,7 @@ export async function fetchClassSubjects({
   if (error) throw new Error(error.message);
 
   const classInfo = data?.[0]?.classes?.[0] ?? null;
+  const homeroomTeacher = classInfo?.homeroom_teacher?.[0] ?? null;
 
   return {
     classId,
@@ -87,6 +90,8 @@ export async function fetchClassSubjects({
       : "Class",
     grade: classInfo?.grade ?? null,
     section: classInfo?.section ?? null,
+    homeroomTeacherId: homeroomTeacher?.id ?? null,
+    homeroomTeacherName: homeroomTeacher?.profiles?.[0]?.full_name ?? null,
     classSubjects: (data ?? []).map((record) =>
       mapClassSubject(record as ClassSubjectRecord),
     ),
@@ -164,7 +169,7 @@ export async function addClassSubject({
       teacher_id: teacherId ?? null,
     })
     .select(
-      "id, class_id, subject_id, teacher_id, classes(id, name, grade, section), subjects(id, name), teachers(id, profiles(full_name))",
+      "id, class_id, subject_id, teacher_id, classes(id, name, grade, section, homeroom_teacher:teachers!classes_homeroom_teacher_id_fkey(id, profiles(full_name))), subjects(id, name), teachers(id, profiles(full_name))",
     )
     .single();
 
@@ -199,7 +204,7 @@ export async function updateClassSubjectTeacher({
 
   const { data, error } = await request
     .select(
-      "id, class_id, subject_id, teacher_id, classes(id, name, grade, section), subjects(id, name), teachers(id, profiles(full_name))",
+      "id, class_id, subject_id, teacher_id, classes(id, name, grade, section, homeroom_teacher:teachers!classes_homeroom_teacher_id_fkey(id, profiles(full_name))), subjects(id, name), teachers(id, profiles(full_name))",
     )
     .single();
 

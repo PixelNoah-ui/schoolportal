@@ -16,6 +16,7 @@ export interface AllStudentRow {
   phone: string;
   dob: string;
   classId: string;
+  gender?: "male" | "female" | null;
   temporaryPassword: string | null;
 }
 

@@ -24,8 +24,9 @@ export interface FieldOption {
 export interface FieldConfig {
   name: string;
   label: string;
-  type?: "text" | "email" | "number" | "date" | "select";
+  type?: "text" | "email" | "number" | "date" | "select" | "radio";
   options?: FieldOption[];
+  fullWidth?: boolean;
 }
 
 interface EntityFormDialogProps {
@@ -40,6 +41,7 @@ interface EntityFormDialogProps {
   onOpenChange?: (open: boolean) => void;
   isLoading?: boolean;
   submitLabel?: string;
+  columns?: 1 | 2;
 }
 
 export function EntityFormDialog({
@@ -54,6 +56,7 @@ export function EntityFormDialog({
   onOpenChange,
   isLoading = false,
   submitLabel,
+  columns = 1,
 }: EntityFormDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
@@ -79,11 +82,41 @@ export function EntityFormDialog({
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
-        <div className="grid gap-4 py-2">
+        <div
+          className={`grid gap-4 py-2 ${columns === 2 ? "sm:grid-cols-2" : "grid-cols-1"}`}
+        >
           {fields.map((f) => (
-            <div key={f.name} className="space-y-2">
+            <div
+              key={f.name}
+              className={`space-y-2 ${columns === 2 && f.fullWidth ? "sm:col-span-2" : ""}`}
+            >
               <Label htmlFor={f.name}>{f.label}</Label>
-              {f.type === "select" ? (
+              {f.type === "radio" ? (
+                <div className="flex gap-5 pt-1">
+                  {(f.options ?? []).map((option) => (
+                    <label
+                      key={option.value}
+                      className="flex items-center gap-2 text-sm"
+                    >
+                      <input
+                        type="radio"
+                        name={f.name}
+                        value={option.value}
+                        checked={values[f.name] === option.value}
+                        disabled={readOnly}
+                        onChange={(e) =>
+                          setValues((prev) => ({
+                            ...prev,
+                            [f.name]: e.target.value,
+                          }))
+                        }
+                        className="size-4 accent-primary"
+                      />
+                      {option.label}
+                    </label>
+                  ))}
+                </div>
+              ) : f.type === "select" ? (
                 <select
                   id={f.name}
                   value={values[f.name] ?? ""}

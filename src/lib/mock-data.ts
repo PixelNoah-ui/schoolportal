@@ -207,6 +207,7 @@ export interface AllStudentRow extends StudentRow {
   phone: string;
   dob: string;
   classId: string;
+  gender?: "male" | "female" | null;
   temporaryPassword?: string;
 }
 

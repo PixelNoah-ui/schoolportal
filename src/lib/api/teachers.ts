@@ -23,7 +23,13 @@ type TeacherRecord = {
 };
 
 function mapTeacher(teacher: TeacherRecord): TeacherRow {
-  const profile = teacher.profiles[0];
+  const profile: Profile = teacher.profiles?.[0] ?? {
+    id: teacher.profile_id,
+    full_name: "Unknown teacher",
+    username: "-",
+    email: "-",
+    role: "teacher",
+  };
   const subjects = teacher.class_subjects.flatMap((assignment) =>
     assignment.subjects.map((subject) => subject.name),
   );

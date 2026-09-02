@@ -26,6 +26,9 @@ export async function POST(request: Request) {
     .trim()
     .toLowerCase();
   const gradeId = String(body.grade_id ?? "").trim();
+  const gender = String(body.gender ?? "")
+    .trim()
+    .toLowerCase();
 
   if (!fullName || !email || !gradeId)
     return NextResponse.json(
@@ -69,7 +72,9 @@ export async function POST(request: Request) {
     .from("profiles")
     .select("username")
     .ilike("username", `${base}%`);
-  const usernames = new Set((existing ?? []).map((profile) => profile.username));
+  const usernames = new Set(
+    (existing ?? []).map((profile) => profile.username),
+  );
 
   let username = base;
   let suffix = 1;
@@ -132,8 +137,11 @@ export async function POST(request: Request) {
       phone: body.phone || null,
       date_of_birth: body.dob || null,
       temporary_password: temporaryPassword,
+      gender: gender || null,
     })
-    .select("id, profile_id, phone, date_of_birth, temporary_password, created_at")
+    .select(
+      "id, profile_id, phone, date_of_birth, temporary_password, created_at",
+    )
     .single();
   if (studentError) {
     await admin.auth.admin.deleteUser(authData.user.id);

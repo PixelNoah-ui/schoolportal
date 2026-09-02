@@ -114,10 +114,16 @@ export async function POST(request: Request) {
   }
 
   // Create class_subjects entries for assigned classes and subjects
-  const assignments = body.assignments ?? [];
-  const classSubjectAssignments = assignments.map((assignment: any) => ({
-    class_id: assignment.classId,
-    subject_id: assignment.subjectId,
+  const assignments = Array.isArray(body.assignments)
+    ? (body.assignments as Array<{
+        classId?: unknown;
+        subjectId?: unknown;
+        subjectName?: unknown;
+      }>)
+    : [];
+  const classSubjectAssignments = assignments.map((assignment) => ({
+    class_id: String(assignment.classId ?? ""),
+    subject_id: String(assignment.subjectId ?? ""),
     teacher_id: teacherId,
   }));
 
@@ -133,9 +139,11 @@ export async function POST(request: Request) {
   }
 
   // Get unique classes for class count
-  const uniqueClassIds = new Set(assignments.map((a: any) => a.classId));
+  const uniqueClassIds = new Set(
+    assignments.map((assignment) => assignment.classId),
+  );
   const subjectNames = new Set(
-    assignments.map((a: any) => a.subjectName).filter(Boolean),
+    assignments.map((assignment) => assignment.subjectName).filter(Boolean),
   );
 
   return NextResponse.json({

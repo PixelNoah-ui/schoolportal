@@ -15,7 +15,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useTeachers } from "@/hooks/use-teachers";
 
 const DEFAULT_SECTION_OPTIONS = ["A", "B"];
 
@@ -63,16 +62,6 @@ export function ClassFormDialog({
   );
   const [customSectionInput, setCustomSectionInput] = useState("");
   const [customSections, setCustomSections] = useState<string[]>([]);
-  const [homeroomTeacher, setHomeroomTeacher] = useState(
-    initialValues?.homeroom_teacher ?? "",
-  );
-  const { data: teachersData } = useTeachers({ pageSize: 200 });
-
-  const teacherOptions = (teachersData?.teachers ?? []).map((teacher) => ({
-    id: teacher.id,
-    name: teacher.profile.full_name,
-  }));
-
   const sectionOptions = Array.from(
     new Set([...DEFAULT_SECTION_OPTIONS, ...customSections]),
   );
@@ -102,7 +91,6 @@ export function ClassFormDialog({
     setSelectedSections(parsedSections);
     setSectionMode(parsedSections.length ? "selected" : "none");
     setCustomSectionInput("");
-    setHomeroomTeacher(initialValues?.homeroom_teacher ?? "");
   }, [open, initialValues]);
 
   function toggleSection(section: string) {
@@ -150,7 +138,6 @@ export function ClassFormDialog({
     const payload = {
       grade: Number(grade),
       section: sectionMode === "selected" ? selectedSections.join(", ") : "",
-      homeroom_teacher: homeroomTeacher || "",
     };
 
     await Promise.resolve(onSubmit(payload));
@@ -163,7 +150,6 @@ export function ClassFormDialog({
     setSelectedSections([]);
     setSectionMode("none");
     setCustomSectionInput("");
-    setHomeroomTeacher("");
   }
 
   return (
@@ -176,7 +162,7 @@ export function ClassFormDialog({
           </DialogTitle>
           <DialogDescription>
             {mode === "add"
-              ? "Choose a grade, optional section, and optional homeroom teacher."
+              ? "Choose a grade and one or more sections."
               : "Update class details."}
           </DialogDescription>
         </DialogHeader>
@@ -254,26 +240,6 @@ export function ClassFormDialog({
                 Add
               </Button>
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="homeroomTeacher">
-              Homeroom Teacher{" "}
-              <span className="text-xs text-muted-foreground">(Optional)</span>
-            </Label>
-            <select
-              id="homeroomTeacher"
-              value={homeroomTeacher}
-              onChange={(e) => setHomeroomTeacher(e.target.value)}
-              className="flex h-10 w-full rounded-none border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-            >
-              <option value="">Select teacher (optional)</option>
-              {teacherOptions.map((teacher) => (
-                <option key={teacher.id} value={teacher.name}>
-                  {teacher.name}
-                </option>
-              ))}
-            </select>
           </div>
         </div>
 

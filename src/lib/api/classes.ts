@@ -32,11 +32,13 @@ type ClassRecord = {
   name: string;
   grade: number;
   section: string | null;
+  homeroom_teacher_id?: string | null;
   created_at: string;
   students: { id: string }[];
   class_subjects: {
     teachers: { profiles: { full_name: string }[] }[];
   }[];
+  homeroom_teacher: { profiles: { full_name: string }[] }[];
 };
 
 function mapClass(classRow: ClassRecord): ClassRow {
@@ -51,6 +53,8 @@ function mapClass(classRow: ClassRecord): ClassRow {
         .filter(Boolean),
     ),
   ];
+  const homeroomTeacher =
+    classRow.homeroom_teacher?.[0]?.profiles?.[0]?.full_name;
 
   return {
     id: classRow.id,
@@ -60,7 +64,9 @@ function mapClass(classRow: ClassRecord): ClassRow {
     grade: classRow.grade,
     section: classRow.section ?? "",
     studentCount: classRow.students.length,
-    teacher: teacherNames.length ? teacherNames.join(", ") : "Unassigned",
+    teacher:
+      homeroomTeacher ??
+      (teacherNames.length ? teacherNames.join(", ") : "Unassigned"),
   };
 }
 
@@ -76,7 +82,7 @@ export async function fetchClasses({
   let request = supabase
     .from("classes")
     .select(
-      "id, academic_year_id, academic_years!classes_academic_year_id_fkey(id, name), name, grade, section, created_at, students(id), class_subjects(teachers(profiles(full_name)))",
+      "id, academic_year_id, academic_years!classes_academic_year_id_fkey(id, name), name, grade, section, homeroom_teacher:teachers!classes_homeroom_teacher_id_fkey(profiles(full_name)), created_at, students(id), class_subjects(teachers(profiles(full_name)))",
       { count: "exact" },
     )
     .order("grade", { ascending: true })
@@ -142,9 +148,10 @@ export async function createClass(payload: Record<string, string>) {
       name: className,
       grade,
       section: section || null,
+      homeroom_teacher_id: payload.homeroom_teacher || null,
     })
     .select(
-      "id, academic_year_id, academic_years!classes_academic_year_id_fkey(id, name), name, grade, section, created_at, students(id), class_subjects(teachers(profiles(full_name)))",
+      "id, academic_year_id, academic_years!classes_academic_year_id_fkey(id, name), name, grade, section, homeroom_teacher:teachers!classes_homeroom_teacher_id_fkey(profiles(full_name)), created_at, students(id), class_subjects(teachers(profiles(full_name)))",
     )
     .single();
   if (error) throw new Error(error.message);
@@ -164,6 +171,7 @@ export async function updateClass(id: string, payload: Record<string, string>) {
       name: className,
       grade,
       section: section || null,
+      homeroom_teacher_id: payload.homeroom_teacher || null,
     })
     .eq("id", id);
   if (error) throw new Error(error.message);

@@ -14,23 +14,6 @@ type ProfileRow = Pick<
   "id" | "full_name" | "username" | "email" | "role"
 >;
 
-type StudentRecord = {
-  id: string;
-  profile_id: string;
-  class_id: string | null;
-  phone: string | null;
-  date_of_birth: string | null;
-  temporary_password: string | null;
-  created_at: string;
-  profiles: ProfileRow[];
-  classes: {
-    id: string;
-    name: string;
-    grade: number;
-    section: string | null;
-  }[];
-};
-
 type TeacherRecord = { id: string; profile_id: string; profiles: ProfileRow[] };
 
 type ClassRecord = {
@@ -52,7 +35,7 @@ type ClassSubjectRecord = {
 type GradeRecord = {
   score: number;
   student_id: string;
-  class_subject_id: string;
+  course_assessments: { class_subject_id: string }[];
 };
 
 type PaymentRecord = {
@@ -114,7 +97,7 @@ export async function fetchDashboard(): Promise<DashboardData> {
     semesters,
     payments,
   ] = await Promise.all([
-    query<TeacherRecord>(
+    query<TeacherRecord[]>(
       supabase
         .from("teachers")
         .select(
@@ -136,7 +119,10 @@ export async function fetchDashboard(): Promise<DashboardData> {
         .select("id, class_id, subject_id, teacher_id"),
     ),
     query<GradeRecord[]>(
-      supabase.from("grades").select("score, student_id, class_subject_id"),
+      supabase
+        .from("assessment_results")
+        .select("score, student_id, course_assessments!inner(class_subject_id)")
+        .eq("status", "graded"),
     ),
     query<AcademicYearRecord[]>(
       supabase
@@ -170,7 +156,7 @@ export async function fetchDashboard(): Promise<DashboardData> {
   const scoresBySubject = new Map<string, number[]>();
   grades.forEach((grade) => {
     const classSubject = classSubjects.find(
-      (row) => row.id === grade.class_subject_id,
+      (row) => row.id === grade.course_assessments[0]?.class_subject_id,
     );
     if (!classSubject) return;
     const scores = scoresBySubject.get(classSubject.subject_id) ?? [];
@@ -178,7 +164,10 @@ export async function fetchDashboard(): Promise<DashboardData> {
     scoresBySubject.set(classSubject.subject_id, scores);
   });
 
-  const mappedStudents: AllStudentRow[] = students;
+  const mappedStudents: AllStudentRow[] = students.map((student) => ({
+    ...student,
+    temporaryPassword: student.temporaryPassword ?? null,
+  }));
 
   // NOTE: homeroom teacher isn't joined in the current `classes` select, so
   // this stays "Unassigned" until that relation is added to the query.

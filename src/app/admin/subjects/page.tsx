@@ -11,7 +11,6 @@ import {
   EntityFormDialog,
   type FieldConfig,
 } from "@/components/admin/entity-form-dialog";
-import { GradeBadge } from "@/components/admin/grade-badge";
 import { TableSkeleton } from "@/components/admin/table-skeleton";
 import { EntityEmptyState } from "@/components/admin/entity-empty-state";
 import { Button } from "@/components/ui/button";
@@ -32,15 +31,7 @@ import {
   useDeleteSubject,
 } from "@/hooks/use-subjects";
 
-const gradeOptions = Array.from({ length: 12 }, (_, index) => ({
-  label: `Grade ${index + 1}`,
-  value: String(index + 1),
-}));
-
-const subjectFields: FieldConfig[] = [
-  { name: "name", label: "Subject Name" },
-  { name: "grade", label: "Grade", type: "select", options: gradeOptions },
-];
+const subjectFields: FieldConfig[] = [{ name: "name", label: "Subject Name" }];
 
 export default function SubjectsPage() {
   const router = useRouter();
@@ -116,14 +107,12 @@ export default function SubjectsPage() {
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <TableHead>Subject</TableHead>
-              <TableHead>Grade</TableHead>
-              <TableHead>Teacher</TableHead>
               <TableHead className="w-28 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
 
           {isLoading ? (
-            <TableSkeleton rows={6} columns={5} />
+            <TableSkeleton rows={6} columns={2} />
           ) : (
             <TableBody>
               {data?.subjects.map((subject) => (
@@ -131,19 +120,12 @@ export default function SubjectsPage() {
                   <TableCell className="text-sm font-medium">
                     {subject.name}
                   </TableCell>
-                  <TableCell className="text-sm">
-                    {subject.grade ? `Grade ${subject.grade}` : "-"}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {subject.teacher}
-                  </TableCell>
                   <TableCell>
                     <RowActions
                       entityName={subject.name}
                       fields={subjectFields}
                       values={{
                         name: subject.name,
-                        grade: String(subject.grade ?? ""),
                       }}
                       onEdit={(values) =>
                         updateSubject.mutateAsync({
@@ -169,7 +151,7 @@ export default function SubjectsPage() {
             hasFilters={hasFilters}
             onClearFilters={hasFilters ? clearFilters : undefined}
             onAdd={!hasFilters ? () => setAddOpen(true) : undefined}
-            description="Once you add subjects, they'll show up here with their grade and assigned teacher."
+            description="Once you add subjects, they'll show up here. Classes and teacher assignments are managed separately."
           />
         )}
 

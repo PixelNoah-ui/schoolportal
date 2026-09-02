@@ -41,6 +41,7 @@ interface ClassOption {
 interface TeacherAssignment {
   subjectId: string;
   classId: string;
+  subjectName?: string;
 }
 
 type TeacherFormValues = Record<string, unknown> & {
@@ -72,16 +73,13 @@ export function TeacherFormDialog({
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [classes, setClasses] = useState<ClassOption[]>([]);
-  const [selectedSubjects, setSelectedSubjects] = useState<Set<string>>(
-    new Set(),
-  );
-  const [selectedClasses, setSelectedClasses] = useState<Set<string>>(
-    new Set(),
-  );
+  const [selectedClass, setSelectedClass] = useState("");
+  const [selectedSubject, setSelectedSubject] = useState("");
   const [assignments, setAssignments] = useState<TeacherAssignment[]>([]);
 
-  const [showSubjectSelect, setShowSubjectSelect] = useState(false);
-  const [showClassSelect, setShowClassSelect] = useState(false);
+  const [classSubjects, setClassSubjects] = useState<Record<string, Subject[]>>(
+    {},
+  );
   const [loadingOptions, setLoadingOptions] = useState(false);
 
   useEffect(() => {
@@ -111,39 +109,25 @@ export function TeacherFormDialog({
     }
   }
 
-  function toggleSubject(subjectId: string) {
-    const newSelected = new Set(selectedSubjects);
-    if (newSelected.has(subjectId)) {
-      newSelected.delete(subjectId);
-    } else {
-      newSelected.add(subjectId);
-    }
-    setSelectedSubjects(newSelected);
-  }
-
-  function toggleClass(classId: string) {
-    const newSelected = new Set(selectedClasses);
-    if (newSelected.has(classId)) {
-      newSelected.delete(classId);
-    } else {
-      newSelected.add(classId);
-    }
-    setSelectedClasses(newSelected);
-  }
-
   function addAssignments() {
-    const newAssignments: TeacherAssignment[] = [];
-    selectedSubjects.forEach((subjectId) => {
-      selectedClasses.forEach((classId) => {
-        newAssignments.push({ subjectId, classId });
-      });
-    });
-
-    setAssignments((prev) => [...prev, ...newAssignments]);
-    setSelectedSubjects(new Set());
-    setSelectedClasses(new Set());
-    setShowSubjectSelect(false);
-    setShowClassSelect(false);
+    if (!selectedClass || !selectedSubject) return;
+    if (
+      assignments.some(
+        (assignment) =>
+          assignment.classId === selectedClass &&
+          assignment.subjectId === selectedSubject,
+      )
+    )
+      return;
+    setAssignments((prev) => [
+      ...prev,
+      {
+        subjectId: selectedSubject,
+        classId: selectedClass,
+        subjectName: getSubjectName(selectedSubject),
+      },
+    ]);
+    setSelectedSubject("");
   }
 
   function removeAssignment(index: number) {
@@ -185,8 +169,8 @@ export function TeacherFormDialog({
     setEmail("");
     setPhone("");
     setGender("");
-    setSelectedSubjects(new Set());
-    setSelectedClasses(new Set());
+    setSelectedClass("");
+    setSelectedSubject("");
     setAssignments([]);
   }
 
@@ -259,108 +243,81 @@ export function TeacherFormDialog({
           <div className="space-y-4">
             <h3 className="font-semibold text-sm">Teaching Assignments</h3>
 
-            {/* Subject Selection */}
-            <div className="space-y-2">
-              <Label>Select Subjects</Label>
-              <button
-                type="button"
-                onClick={() => setShowSubjectSelect(!showSubjectSelect)}
-                className="w-full text-left px-3 py-2 border border-input rounded-none hover:bg-accent text-sm"
-              >
-                {selectedSubjects.size > 0
-                  ? `${selectedSubjects.size} subject(s) selected`
-                  : "Click to select subjects"}
-              </button>
-              {showSubjectSelect && (
-                <div className="border border-input rounded-none p-3 space-y-2 max-h-48 overflow-y-auto">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="teacher-class">1. Select class</Label>
+                <select
+                  id="teacher-class"
+                  value={selectedClass}
+                  onChange={async (event) => {
+                    const classId = event.target.value;
+                    setSelectedClass(classId);
+                    setSelectedSubject("");
+                    if (classId && !classSubjects[classId]) {
+                      const supabase = createClient();
+                      const { data } = await supabase
+                        .from("class_subjects")
+                        .select("subject_id, subjects(id, name)")
+                        .eq("class_id", classId);
+                      setClassSubjects((previous) => ({
+                        ...previous,
+                        [classId]: (data ?? [])
+                          .map((row) => row.subjects)
+                          .flat() as Subject[],
+                      }));
+                    }
+                  }}
+                  className="flex h-10 w-full rounded-none border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">Choose a class</option>
+                  {classes.map((classItem) => (
+                    <option key={classItem.id} value={classItem.id}>
+                      Grade {classItem.grade}
+                      {classItem.section
+                        ? ` - Section ${classItem.section}`
+                        : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>2. Select subject for this class</Label>
+                <div className="grid max-h-32 gap-2 overflow-y-auto">
                   {loadingOptions ? (
-                    <div className="text-sm text-muted-foreground">
-                      Loading subjects...
-                    </div>
-                  ) : subjects.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">
-                      No subjects available
-                    </div>
-                  ) : (
-                    subjects.map((subject) => (
-                      <div key={subject.id} className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          id={`subject-${subject.id}`}
-                          checked={selectedSubjects.has(subject.id)}
-                          onChange={() => toggleSubject(subject.id)}
-                          className="rounded"
-                        />
-                        <label
-                          htmlFor={`subject-${subject.id}`}
-                          className="cursor-pointer text-sm"
-                        >
-                          {subject.name}
-                        </label>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Class Selection */}
-            <div className="space-y-2">
-              <Label>Select Classes/Grades</Label>
-              <button
-                type="button"
-                onClick={() => setShowClassSelect(!showClassSelect)}
-                className="w-full text-left px-3 py-2 border border-input rounded-none hover:bg-accent text-sm"
-              >
-                {selectedClasses.size > 0
-                  ? `${selectedClasses.size} class(es) selected`
-                  : "Click to select classes"}
-              </button>
-              {showClassSelect && (
-                <div className="border border-input rounded-none p-3 space-y-2 max-h-48 overflow-y-auto">
-                  {loadingOptions ? (
-                    <div className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground">
                       Loading classes...
-                    </div>
-                  ) : classes.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">
-                      No classes available
-                    </div>
+                    </p>
+                  ) : (classSubjects[selectedClass] ?? []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Select a class to see its subjects.
+                    </p>
                   ) : (
-                    classes.map((classItem) => (
-                      <div
-                        key={classItem.id}
-                        className="flex items-center gap-2"
+                    (classSubjects[selectedClass] ?? []).map((subject) => (
+                      <label
+                        key={subject.id}
+                        className="flex cursor-pointer items-center gap-2 border px-3 py-2 text-sm hover:border-primary"
                       >
                         <input
-                          type="checkbox"
-                          id={`class-${classItem.id}`}
-                          checked={selectedClasses.has(classItem.id)}
-                          onChange={() => toggleClass(classItem.id)}
-                          className="rounded"
+                          type="radio"
+                          name="teacher-subject"
+                          value={subject.id}
+                          checked={selectedSubject === subject.id}
+                          onChange={() => setSelectedSubject(subject.id)}
+                          className="size-4 accent-primary"
                         />
-                        <label
-                          htmlFor={`class-${classItem.id}`}
-                          className="cursor-pointer text-sm"
-                        >
-                          Grade {classItem.grade}
-                          {classItem.section &&
-                            ` - Section ${classItem.section}`}
-                        </label>
-                      </div>
+                        {subject.name}
+                      </label>
                     ))
                   )}
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Add Assignments Button */}
             <Button
               type="button"
               onClick={addAssignments}
-              disabled={
-                selectedSubjects.size === 0 || selectedClasses.size === 0
-              }
+              disabled={!selectedSubject || !selectedClass}
               className="w-full rounded-none"
               variant="outline"
             >

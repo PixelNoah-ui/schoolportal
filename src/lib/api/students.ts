@@ -7,6 +7,7 @@ type StudentRecord = {
   class_id: string | null;
   grade_id: string | null;
   phone: string | null;
+  gender: "male" | "female" | null;
   date_of_birth: string | null;
   temporary_password: string | null;
   created_at: string;
@@ -58,6 +59,7 @@ function mapStudent(
     avgScore: 0,
     joined: new Date(student.created_at).toLocaleDateString(),
     phone: student.phone ?? "Not provided",
+    gender: student.gender,
     dob: student.date_of_birth ?? "",
     classId: student.class_id ?? "",
     gradeId: student.grade_id ?? "",
@@ -99,7 +101,7 @@ export async function fetchStudents({
   let request = supabase
     .from("students")
     .select(
-      "id, profile_id, class_id, grade_id, phone, date_of_birth, temporary_password, created_at, profiles!students_profile_id_fkey(id, full_name, username, email, role), grade_levels(id, name)",
+      "id, profile_id, class_id, grade_id, phone, gender, date_of_birth, temporary_password, created_at, profiles!students_profile_id_fkey(id, full_name, username, email, role), grade_levels(id, name)",
       { count: "exact" },
     )
     .order("created_at", { ascending: false })
@@ -189,6 +191,7 @@ export async function updateStudent(
     .from("students")
     .update({
       phone: payload.phone,
+      gender: payload.gender || null,
       date_of_birth: payload.dob,
       grade_id: payload.grade_id || null,
     })

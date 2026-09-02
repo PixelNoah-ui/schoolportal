@@ -13,6 +13,7 @@ export type ResetEmailInput = {
 
 export type UpdatePasswordInput = {
   password: string;
+  currentPassword?: string;
 };
 
 export async function signIn(input: LoginInput) {
@@ -60,6 +61,20 @@ export async function sendPasswordResetEmail(input: ResetEmailInput) {
 
 export async function updatePassword(input: UpdatePasswordInput) {
   const supabase = createClient();
+  if (input.currentPassword) {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+    if (userError || !user?.email) throw new Error("Your session has expired.");
+
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: input.currentPassword,
+    });
+    if (verifyError) throw new Error("The current password is incorrect.");
+  }
+
   const { data, error } = await supabase.auth.updateUser({
     password: input.password,
   });

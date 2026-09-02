@@ -3,15 +3,21 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Eye, Plus, School } from "lucide-react";
+import { Eye, MoreVertical, Pencil, Plus, School, Trash2 } from "lucide-react";
 import { SiteHeader } from "@/components/admin/site-header";
 import { PageHeader } from "@/components/admin/page-header";
 import { DataToolbar } from "@/components/admin/data-toolbar";
-import { RowActions } from "@/components/admin/row-actions";
 import { ClassFormDialog } from "@/components/admin/class-form-dialog";
 import { TableSkeleton } from "@/components/admin/table-skeleton";
 import { EntityEmptyState } from "@/components/admin/entity-empty-state";
+import { ConfirmDeleteDialog } from "@/components/admin/confirm-delete-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -46,6 +52,8 @@ export default function ClassesPage() {
   const debouncedSearch = useDebouncedValue(searchInput);
   const currentPage = Math.max(1, Number(searchParams.get("page") ?? "1"));
   const [addOpen, setAddOpen] = useState(false);
+  const [editClassId, setEditClassId] = useState<string | null>(null);
+  const [deleteClassId, setDeleteClassId] = useState<string | null>(null);
 
   const { data: academicYears = [] } = useAcademicYears();
   const { data, isLoading } = useClasses({
@@ -85,6 +93,12 @@ export default function ClassesPage() {
     yearFilter === "all"
       ? (academicYears.find((year) => year.isCurrent)?.id ?? "")
       : yearFilter;
+  const editClass = data?.classes.find(
+    (classRow) => classRow.id === editClassId,
+  );
+  const deleteClassRow = data?.classes.find(
+    (classRow) => classRow.id === deleteClassId,
+  );
 
   return (
     <>
@@ -96,12 +110,22 @@ export default function ClassesPage() {
             mode="add"
             open={addOpen}
             onOpenChange={setAddOpen}
-            onSubmit={(values) =>
-              createClass.mutateAsync({
-                ...values,
-                academic_year_id: activeAcademicYearId || "",
-              })
-            }
+            onSubmit={async (values) => {
+              const sections = values.section
+                .split(",")
+                .map((section) => section.trim())
+                .filter(Boolean);
+              const sectionsToCreate = sections.length ? sections : [""];
+              await Promise.all(
+                sectionsToCreate.map((section) =>
+                  createClass.mutateAsync({
+                    ...values,
+                    section,
+                    academic_year_id: activeAcademicYearId || "",
+                  }),
+                ),
+              );
+            }}
             isLoading={createClass.isPending}
             trigger={
               <Button className="rounded-none">
@@ -168,65 +192,47 @@ export default function ClassesPage() {
                     {classRow.studentCount}
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center justify-end gap-2">
-                      <Link
-                        href={`/admin/classes/${classRow.id}`}
-                        className="inline-flex items-center gap-1 rounded-none border px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                      >
-                        <Eye className="size-3.5" />
-                        View
-                      </Link>
-                      <div className="flex items-center justify-end gap-2">
-                        <ClassFormDialog
-                          mode="edit"
-                          initialValues={{
-                            grade: String(classRow.grade),
-                            section: classRow.section || "",
-                            homeroom_teacher: "",
-                          }}
-                          onSubmit={(values) =>
-                            updateClass.mutateAsync({
-                              id: classRow.id,
-                              payload: {
-                                ...values,
-                                academic_year_id: activeAcademicYearId || "",
-                              },
-                            })
-                          }
-                          isLoading={updateClass.isPending}
-                          trigger={
+                    <div className="flex justify-end">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
                             <Button
                               variant="ghost"
                               size="icon"
                               className="size-8 rounded-none"
-                            >
-                              <svg
-                                viewBox="0 0 24 24"
-                                className="size-4"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                aria-hidden="true"
-                              >
-                                <path d="M12 20h9" />
-                                <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z" />
-                              </svg>
-                            </Button>
+                              aria-label={`Actions for ${classRow.name}`}
+                            />
                           }
-                        />
-                        <RowActions
-                          entityName={`${classRow.name} - Grade ${classRow.grade}`}
-                          values={{
-                            name: classRow.name,
-                            grade: String(classRow.grade),
-                            section: classRow.section,
-                            homeroom_teacher: "",
-                          }}
-                          onDelete={() => deleteClass.mutate(classRow.id)}
-                        />
-                      </div>
+                        >
+                          <MoreVertical className="size-4" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="end"
+                          className="min-w-32 rounded-none"
+                        >
+                          <DropdownMenuItem
+                            render={
+                              <Link href={`/admin/classes/${classRow.id}`} />
+                            }
+                          >
+                            <Eye className="size-4" />
+                            View
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setEditClassId(classRow.id)}
+                          >
+                            <Pencil className="size-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onClick={() => setDeleteClassId(classRow.id)}
+                          >
+                            <Trash2 className="size-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -234,6 +240,42 @@ export default function ClassesPage() {
             </TableBody>
           )}
         </Table>
+
+        {editClass && (
+          <ClassFormDialog
+            mode="edit"
+            open
+            onOpenChange={(open) => !open && setEditClassId(null)}
+            initialValues={{
+              grade: String(editClass.grade),
+              section: editClass.section || "",
+              homeroom_teacher: "",
+            }}
+            onSubmit={(values) =>
+              updateClass.mutateAsync({
+                id: editClass.id,
+                payload: {
+                  ...values,
+                  academic_year_id: activeAcademicYearId || "",
+                },
+              })
+            }
+            isLoading={updateClass.isPending}
+          />
+        )}
+
+        {deleteClassRow && (
+          <ConfirmDeleteDialog
+            name={`${deleteClassRow.name} - Grade ${deleteClassRow.grade}`}
+            open
+            onOpenChange={(open) => !open && setDeleteClassId(null)}
+            onConfirm={async () => {
+              await deleteClass.mutateAsync(deleteClassRow.id);
+              setDeleteClassId(null);
+            }}
+            isLoading={deleteClass.isPending}
+          />
+        )}
 
         {isEmpty && (
           <EntityEmptyState

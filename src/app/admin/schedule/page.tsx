@@ -1,7 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarClock, Loader2, Pencil, Plus, Save, X } from "lucide-react";
+import {
+  CalendarClock,
+  Check,
+  Loader2,
+  Pencil,
+  Plus,
+  Save,
+  X,
+} from "lucide-react";
 import { SiteHeader } from "@/components/admin/site-header";
 import { PageHeader } from "@/components/admin/page-header";
 import { Button } from "@/components/ui/button";
@@ -11,9 +19,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -22,7 +28,6 @@ import {
   useCreateSchedule,
   useDeleteSchedule,
   useScheduleCourses,
-  useScheduleRooms,
   useSchedules,
   useUpdateSchedule,
 } from "@/hooks/use-schedules";
@@ -47,7 +52,6 @@ function gradeLabelFor(grade: number, section: string | null) {
 export default function SchedulePage() {
   const { data: courses = [], isLoading: loadingCourses } =
     useScheduleCourses();
-  const { data: roomOptions = [] } = useScheduleRooms();
   const { data: schedules = [] } = useSchedules();
   const createSchedule = useCreateSchedule();
   const updateSchedule = useUpdateSchedule();
@@ -59,7 +63,6 @@ export default function SchedulePage() {
   const [selectedDays, setSelectedDays] = useState<string[]>(["Monday"]);
   const [startTime, setStartTime] = useState("08:00");
   const [endTime, setEndTime] = useState("09:00");
-  const [room, setRoom] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -70,7 +73,6 @@ export default function SchedulePage() {
     setSelectedDays(["Monday"]);
     setStartTime("08:00");
     setEndTime("09:00");
-    setRoom("");
     setEditingId(null);
     setFormError(null);
   };
@@ -81,7 +83,6 @@ export default function SchedulePage() {
     setSelectedDays([slot.day_of_week]);
     setStartTime(slot.start_time);
     setEndTime(slot.end_time);
-    setRoom(slot.room ?? "");
     setFormError(null);
 
     const matchedCourse = courses.find(
@@ -126,20 +127,6 @@ export default function SchedulePage() {
       return matchesGrade && matchesSection;
     });
   }, [courses, selectedGrade, selectedSection]);
-
-  const courseGroups = useMemo(() => {
-    const groups = new Map<string, typeof courses>();
-    for (const course of filteredCourses) {
-      const list = groups.get(course.gradeLabel) ?? [];
-      list.push(course);
-      groups.set(course.gradeLabel, list);
-    }
-    return [...groups.entries()].sort((a, b) => {
-      const gradeA = a[1][0]?.grade ?? 0;
-      const gradeB = b[1][0]?.grade ?? 0;
-      return gradeA - gradeB || a[0].localeCompare(b[0]);
-    });
-  }, [filteredCourses]);
 
   const scheduleByDay = useMemo(() => {
     const map = new Map<string, typeof schedules>(DAYS.map((day) => [day, []]));
@@ -194,7 +181,6 @@ export default function SchedulePage() {
       class_subject_id: selectedCourse,
       start_time: startTime,
       end_time: endTime,
-      room: room || null,
     };
 
     if (editingId) {
@@ -287,71 +273,79 @@ export default function SchedulePage() {
               <div className="space-y-2">
                 <Label>Section</Label>
                 <Select
-                  value={room}
-                  onValueChange={(value) => setRoom(value ?? "")}
+                  value={selectedSection}
+                  onValueChange={handleSectionChange}
+                  disabled={!selectedGrade || sectionOptions.length === 0}
                 >
                   <SelectTrigger className="w-full rounded-none">
-                    <SelectValue placeholder="Select room" />
+                    <SelectValue
+                      placeholder={
+                        selectedGrade && sectionOptions.length === 0
+                          ? "No sections"
+                          : "Select section"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No room</SelectItem>
-                    {roomOptions.map((roomName) => (
-                      <SelectItem key={roomName} value={roomName}>
-                        {roomName}
+                    {sectionOptions.map((section) => (
+                      <SelectItem key={section} value={section}>
+                        Section {section}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              {sectionOptions.length > 0 ? (
-                <div className="space-y-2 sm:col-span-2">
-                  <Label>Section</Label>
-                  <Select
-                    value={selectedSection}
-                    onValueChange={handleSectionChange}
-                  >
-                    <SelectTrigger className="w-full rounded-none">
-                      <SelectValue placeholder="All sections" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">All sections</SelectItem>
-                      {sectionOptions.map((section) => (
-                        <SelectItem key={section} value={section}>
-                          Section {section}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : null}
-
               <div className="space-y-2 sm:col-span-2">
                 <Label>Course</Label>
-                <Select
-                  value={selectedCourse}
-                  onValueChange={(value) => setSelectedCourse(value ?? "")}
-                  disabled={!selectedGrade && filteredCourses.length === 0}
-                >
-                  <SelectTrigger className="w-full rounded-none">
-                    <SelectValue placeholder="Select course" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {courseGroups.map(([label, items]) => (
-                      <SelectGroup key={label}>
-                        <SelectLabel>{label}</SelectLabel>
-                        {items.map((course) => (
-                          <SelectItem key={course.id} value={course.id}>
-                            {course.subjectName} — {course.teacherName}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {filteredCourses.map((course) => (
+                    <label
+                      key={course.id}
+                      className={cn(
+                        "relative flex cursor-pointer items-start gap-3 border p-4 transition-colors hover:border-primary",
+                        selectedCourse === course.id
+                          ? "border-primary bg-primary/5 ring-1 ring-primary"
+                          : "border-border bg-card",
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name="schedule-course"
+                        value={course.id}
+                        checked={selectedCourse === course.id}
+                        onChange={() => setSelectedCourse(course.id)}
+                        className="sr-only"
+                      />
+                      <span
+                        className={cn(
+                          "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border",
+                          selectedCourse === course.id
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-muted-foreground/40",
+                        )}
+                      >
+                        {selectedCourse === course.id && (
+                          <Check className="size-3.5" />
+                        )}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block font-medium">
+                          {course.subjectName}
+                        </span>
+                        <span className="mt-1 block text-xs text-muted-foreground">
+                          {course.gradeLabel}
+                        </span>
+                        <span className="mt-2 block text-xs text-muted-foreground">
+                          Teacher: {course.teacherName}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
                 {!loadingCourses && filteredCourses.length === 0 ? (
                   <p className="text-xs text-muted-foreground">
-                    No matching course is available for this grade/section.
+                    No course is assigned to this grade and section yet.
                   </p>
                 ) : null}
               </div>

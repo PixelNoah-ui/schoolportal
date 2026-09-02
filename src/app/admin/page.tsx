@@ -78,6 +78,11 @@ export default function AdminDashboardPage() {
                 <p className="text-sm leading-6 text-muted-foreground">
                   {message}
                 </p>
+                {error instanceof Error && (
+                  <p className="wrap-break-word text-xs text-muted-foreground">
+                    {error.message}
+                  </p>
+                )}
               </div>
               <Button
                 type="button"

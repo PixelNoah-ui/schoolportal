@@ -138,21 +138,21 @@ export default function TeachersPage() {
                     <div className="flex items-center gap-3">
                       <Avatar className="size-8 rounded-none">
                         <AvatarFallback className="rounded-none bg-secondary text-xs">
-                          {initials(t.profile.full_name)}
+                          {initials(t.profile?.full_name ?? "Unknown teacher")}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex flex-col">
                         <span className="text-sm font-medium">
-                          {t.profile.full_name}
+                          {t.profile?.full_name ?? "Unknown teacher"}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          {t.profile.email}
+                          {t.profile?.email ?? "-"}
                         </span>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">
-                    {t.profile.username}
+                    {t.profile?.username ?? "-"}
                   </TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">
                     {t.temporaryPassword ?? "-"}
@@ -178,11 +178,11 @@ export default function TeachersPage() {
                   </TableCell>
                   <TableCell>
                     <RowActions
-                      entityName={t.profile.full_name}
+                      entityName={t.profile?.full_name ?? "Unknown teacher"}
                       fields={editTeacherFields}
                       values={{
-                        full_name: t.profile.full_name,
-                        email: t.profile.email,
+                        full_name: t.profile?.full_name ?? "",
+                        email: t.profile?.email ?? "",
                         phone: t.phone,
                       }}
                       onEdit={(values) =>

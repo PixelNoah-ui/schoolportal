@@ -37,6 +37,7 @@ import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useAcademicYears } from "@/hooks/use-academic-years";
 import { useClassOptions } from "@/hooks/use-classes";
 import { useGradeOptions } from "@/hooks/use-grades";
+import { useToastManager } from "@/components/ui/toast";
 import {
   useStudents,
   useCreateStudent,
@@ -57,10 +58,7 @@ export default function StudentsPage() {
   const searchParams = useSearchParams();
   const search = searchParams.get("search") ?? "";
   const [searchInput, setSearchInput] = useState(search);
-  const [notification, setNotification] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
+  const toastManager = useToastManager();
   const debouncedSearch = useDebouncedValue(searchInput);
   const classFilter = searchParams.get("class") ?? "all";
   const { data: academicYears = [] } = useAcademicYears();
@@ -79,10 +77,19 @@ export default function StudentsPage() {
   const [addOpen, setAddOpen] = useState(false);
 
   const studentFields: FieldConfig[] = [
-    { name: "full_name", label: "Full name" },
+    { name: "full_name", label: "Full name", fullWidth: true },
     { name: "email", label: "Email", type: "email" },
     { name: "phone", label: "Phone" },
     { name: "dob", label: "Date of birth", type: "date" },
+    {
+      name: "gender",
+      label: "Gender",
+      type: "radio",
+      options: [
+        { label: "Male", value: "male" },
+        { label: "Female", value: "female" },
+      ],
+    },
     {
       name: "grade_id",
       label: "Grade",
@@ -91,6 +98,7 @@ export default function StudentsPage() {
         label: grade.name,
         value: grade.id,
       })),
+      fullWidth: true,
     },
   ];
 
@@ -108,14 +116,6 @@ export default function StudentsPage() {
   const updateStudent = useUpdateStudent();
   const deleteStudent = useDeleteStudent();
 
-  // Auto-hide notification after 3 seconds
-  useEffect(() => {
-    if (notification) {
-      const timer = setTimeout(() => setNotification(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [notification]);
-
   const handleCreateStudent = async (values: Record<string, string>) => {
     try {
       await createStudent.mutateAsync({
@@ -123,15 +123,17 @@ export default function StudentsPage() {
         grade_id: values.grade_id || "",
       });
       setAddOpen(false);
-      setNotification({
+      toastManager.add({
+        title: "Student created",
+        description: "The student account was created successfully.",
         type: "success",
-        message: "Student created successfully!",
       });
     } catch (error) {
-      setNotification({
-        type: "error",
-        message:
+      toastManager.add({
+        title: "Could not create student",
+        description:
           error instanceof Error ? error.message : "Failed to create student",
+        type: "error",
       });
     }
   };
@@ -142,15 +144,17 @@ export default function StudentsPage() {
   ) => {
     try {
       await updateStudent.mutateAsync({ id, payload: values });
-      setNotification({
+      toastManager.add({
+        title: "Student updated",
+        description: "The student record was updated successfully.",
         type: "success",
-        message: "Student updated successfully!",
       });
     } catch (error) {
-      setNotification({
-        type: "error",
-        message:
+      toastManager.add({
+        title: "Could not update student",
+        description:
           error instanceof Error ? error.message : "Failed to update student",
+        type: "error",
       });
     }
   };
@@ -158,15 +162,17 @@ export default function StudentsPage() {
   const handleDeleteStudent = async (id: string) => {
     try {
       await deleteStudent.mutateAsync(id);
-      setNotification({
+      toastManager.add({
+        title: "Student deleted",
+        description: "The student record was deleted successfully.",
         type: "success",
-        message: "Student deleted successfully!",
       });
     } catch (error) {
-      setNotification({
-        type: "error",
-        message:
+      toastManager.add({
+        title: "Could not delete student",
+        description:
           error instanceof Error ? error.message : "Failed to delete student",
+        type: "error",
       });
     }
   };
@@ -216,17 +222,6 @@ export default function StudentsPage() {
     <>
       <SiteHeader title="Students" />
 
-      {/* Notification Toast */}
-      {notification && (
-        <div
-          className={`fixed top-4 right-4 px-4 py-3 rounded-lg shadow-lg text-white z-50 animate-in fade-in slide-in-from-top-2 duration-300 ${
-            notification.type === "success" ? "bg-green-500" : "bg-red-500"
-          }`}
-        >
-          {notification.message}
-        </div>
-      )}
-
       <div className="flex flex-1 flex-col gap-5 p-6">
         <div className="flex items-center justify-between">
           <PageHeader eyebrow="All Students" count={data?.totalPages} />
@@ -235,6 +230,7 @@ export default function StudentsPage() {
             title="Add student"
             description="Create a new student record."
             fields={studentFields}
+            columns={2}
             open={addOpen}
             onOpenChange={setAddOpen}
             onSubmit={handleCreateStudent}
@@ -287,6 +283,7 @@ export default function StudentsPage() {
               <TableHead>Password</TableHead>
               <TableHead>Grade</TableHead>
               <TableHead>Class</TableHead>
+              <TableHead>Gender</TableHead>
               <TableHead>Phone</TableHead>
               <TableHead>Date of Birth</TableHead>
               <TableHead className="w-28 text-right">Actions</TableHead>
@@ -294,7 +291,7 @@ export default function StudentsPage() {
           </TableHeader>
 
           {isLoading ? (
-            <TableSkeleton rows={6} columns={8} />
+            <TableSkeleton rows={6} columns={9} />
           ) : (
             <TableBody>
               {data?.students.map((s) => {
@@ -339,6 +336,9 @@ export default function StudentsPage() {
                     <TableCell className="text-sm text-muted-foreground">
                       {classLabel}
                     </TableCell>
+                    <TableCell className="text-sm capitalize text-muted-foreground">
+                      {s.gender ?? "-"}
+                    </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {s.phone || "Not provided"}
                     </TableCell>
@@ -354,6 +354,7 @@ export default function StudentsPage() {
                           email: email === "-" ? "" : email,
                           phone: s.phone,
                           dob: s.dob,
+                          gender: s.gender ?? "",
                           grade_id: gradeId,
                         }}
                         onEdit={(values) => handleUpdateStudent(s.id, values)}
