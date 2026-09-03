@@ -18,12 +18,18 @@ type TeacherRecord = {
   phone: string | null;
   temporary_password: string | null;
   created_at: string;
-  profiles: Profile[];
-  class_subjects: { class_id: string; subjects: { name: string }[] }[];
+  profiles: Profile | Profile[] | null;
+  class_subjects: {
+    class_id: string;
+    subjects: { name: string } | { name: string }[] | null;
+  }[];
 };
 
 function mapTeacher(teacher: TeacherRecord): TeacherRow {
-  const profile: Profile = teacher.profiles?.[0] ?? {
+  const profile = Array.isArray(teacher.profiles)
+    ? teacher.profiles[0]
+    : teacher.profiles;
+  const normalizedProfile: Profile = profile ?? {
     id: teacher.profile_id,
     full_name: "Unknown teacher",
     username: "-",
@@ -31,7 +37,12 @@ function mapTeacher(teacher: TeacherRecord): TeacherRow {
     role: "teacher",
   };
   const subjects = teacher.class_subjects.flatMap((assignment) =>
-    assignment.subjects.map((subject) => subject.name),
+    (Array.isArray(assignment.subjects)
+      ? assignment.subjects
+      : assignment.subjects
+        ? [assignment.subjects]
+        : []
+    ).map((subject) => subject.name),
   );
   const classIds = [
     ...new Set(
@@ -44,7 +55,7 @@ function mapTeacher(teacher: TeacherRecord): TeacherRow {
   return {
     id: teacher.id,
     teacher_number: "",
-    profile,
+    profile: normalizedProfile,
     subjects: [...new Set(subjects)],
     classCount: classIds.length,
     phone: teacher.phone ?? "",

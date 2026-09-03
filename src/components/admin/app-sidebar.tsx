@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ChevronsUpDown, LogOut } from "lucide-react";
 
@@ -33,6 +33,7 @@ import { adminNavMain, adminNavFooter } from "./nav-config";
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [email, setEmail] = useState("Loading...");
   const [displayName, setDisplayName] = useState("Account");
 
@@ -56,6 +57,16 @@ export function AppSidebar() {
     email === "Loading..." || email === "No email"
       ? "--"
       : email.slice(0, 2).toUpperCase();
+
+  async function handleLogout() {
+    const { error } = await createClient().auth.signOut();
+    if (error) {
+      console.error("Logout failed:", error.message);
+      return;
+    }
+    router.replace("/login");
+    router.refresh();
+  }
 
   return (
     <Sidebar collapsible="icon" className="border-r">
@@ -159,7 +170,10 @@ export function AppSidebar() {
               <DropdownMenuContent side="top" align="start" className="w-56">
                 <DropdownMenuItem>Account settings</DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive">
+                <DropdownMenuItem
+                  className="text-destructive"
+                  onClick={handleLogout}
+                >
                   <LogOut className="mr-2 size-4" />
                   Log out
                 </DropdownMenuItem>

@@ -12,6 +12,7 @@ import { TableSkeleton } from "@/components/admin/table-skeleton";
 import { EntityEmptyState } from "@/components/admin/entity-empty-state";
 import { ConfirmDeleteDialog } from "@/components/admin/confirm-delete-dialog";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,6 +43,17 @@ import {
 } from "@/hooks/use-classes";
 import { useAcademicYears } from "@/hooks/use-academic-years";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useSubjects } from "@/hooks/use-subjects";
+import { addClassSubject } from "@/lib/api/class-subjects";
+
+function initials(name: string) {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
 
 export default function ClassesPage() {
   const router = useRouter();
@@ -56,6 +68,9 @@ export default function ClassesPage() {
   const [deleteClassId, setDeleteClassId] = useState<string | null>(null);
 
   const { data: academicYears = [] } = useAcademicYears();
+  const { data: subjectOptions = { subjects: [] } } = useSubjects({
+    pageSize: 200,
+  });
   const { data, isLoading } = useClasses({
     search: debouncedSearch,
     academicYearId: yearFilter,
@@ -110,20 +125,35 @@ export default function ClassesPage() {
             mode="add"
             open={addOpen}
             onOpenChange={setAddOpen}
+            subjectOptions={subjectOptions.subjects}
             onSubmit={async (values) => {
               const sections = values.section
                 .split(",")
                 .map((section) => section.trim())
                 .filter(Boolean);
               const sectionsToCreate = sections.length ? sections : [""];
+
               await Promise.all(
-                sectionsToCreate.map((section) =>
-                  createClass.mutateAsync({
-                    ...values,
+                sectionsToCreate.map(async (section) => {
+                  const createdClass = await createClass.mutateAsync({
+                    grade: values.grade,
                     section,
                     academic_year_id: activeAcademicYearId || "",
-                  }),
-                ),
+                  });
+
+                  if (values.subjects.length) {
+                    await Promise.all(
+                      values.subjects.map((subjectId) =>
+                        addClassSubject({
+                          classId: createdClass.id,
+                          subjectId,
+                        }),
+                      ),
+                    );
+                  }
+
+                  return createdClass;
+                }),
               );
             }}
             isLoading={createClass.isPending}
@@ -160,86 +190,126 @@ export default function ClassesPage() {
           </Select>
         </div>
 
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead>Class</TableHead>
-              <TableHead>Grade</TableHead>
-              <TableHead>Section</TableHead>
-              <TableHead>Homeroom teacher</TableHead>
-              <TableHead>Students</TableHead>
-              <TableHead className="w-28 text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
+        <div className="overflow-hidden rounded-none border">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Class</TableHead>
+                <TableHead>Grade</TableHead>
+                <TableHead>Section</TableHead>
+                <TableHead>Homeroom teacher</TableHead>
+                <TableHead>Students</TableHead>
+                <TableHead className="w-28 text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
 
-          {isLoading ? (
-            <TableSkeleton rows={6} columns={6} />
-          ) : (
-            <TableBody>
-              {data?.classes.map((classRow) => (
-                <TableRow key={classRow.id}>
-                  <TableCell className="font-medium">{classRow.name}</TableCell>
-                  <TableCell className="text-sm">
-                    Grade {classRow.grade}
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {classRow.section || "-"}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {classRow.teacher}
-                  </TableCell>
-                  <TableCell className="text-sm tabular-nums">
-                    {classRow.studentCount}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex justify-end">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          render={
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="size-8 rounded-none"
-                              aria-label={`Actions for ${classRow.name}`}
-                            />
-                          }
-                        >
-                          <MoreVertical className="size-4" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="end"
-                          className="min-w-32 rounded-none"
-                        >
-                          <DropdownMenuItem
+            {isLoading ? (
+              <TableSkeleton rows={6} columns={6} />
+            ) : (
+              <TableBody>
+                {data?.classes.map((classRow) => (
+                  <TableRow
+                    key={classRow.id}
+                    className="group border-b border-border/60 transition-colors odd:bg-muted/20 hover:bg-muted/50"
+                  >
+                    <TableCell className="border-l-4 border-l-primary/40 font-medium">
+                      <div className="flex flex-col gap-0.5">
+                        <span>{classRow.name}</span>
+                        <span className="text-xs font-normal text-muted-foreground">
+                          {classRow.academicYearName ?? "Current academic year"}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className="rounded-full border-border bg-background font-medium text-foreground"
+                      >
+                        Grade {classRow.grade}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {classRow.section ? (
+                        <span className="flex size-7 items-center justify-center rounded-full border border-border bg-background text-xs font-semibold text-foreground">
+                          {classRow.section}
+                        </span>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">
+                          Unassigned
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {classRow.teacher && classRow.teacher !== "Unassigned" ? (
+                        <span className="inline-flex items-center gap-2">
+                          <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-muted text-[10px] font-semibold text-foreground">
+                            {initials(classRow.teacher)}
+                          </span>
+                          <span className="text-muted-foreground">
+                            {classRow.teacher}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-xs font-medium text-amber-600">
+                          Unassigned
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <span className="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium tabular-nums text-foreground">
+                        {classRow.studentCount} students
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex justify-end opacity-70 transition-opacity group-hover:opacity-100">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
                             render={
-                              <Link href={`/admin/classes/${classRow.id}`} />
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-8 rounded-none"
+                                aria-label={`Actions for ${classRow.name}`}
+                              />
                             }
                           >
-                            <Eye className="size-4" />
-                            View
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => setEditClassId(classRow.id)}
+                            <MoreVertical className="size-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent
+                            align="end"
+                            className="min-w-32 rounded-none"
                           >
-                            <Pencil className="size-4" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            variant="destructive"
-                            onClick={() => setDeleteClassId(classRow.id)}
-                          >
-                            <Trash2 className="size-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          )}
-        </Table>
+                            <DropdownMenuItem
+                              render={
+                                <Link href={`/admin/classes/${classRow.id}`} />
+                              }
+                            >
+                              <Eye className="size-4" />
+                              View
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => setEditClassId(classRow.id)}
+                            >
+                              <Pencil className="size-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onClick={() => setDeleteClassId(classRow.id)}
+                            >
+                              <Trash2 className="size-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            )}
+          </Table>
+        </div>
 
         {editClass && (
           <ClassFormDialog
@@ -255,7 +325,8 @@ export default function ClassesPage() {
               updateClass.mutateAsync({
                 id: editClass.id,
                 payload: {
-                  ...values,
+                  grade: values.grade,
+                  section: values.section,
                   academic_year_id: activeAcademicYearId || "",
                 },
               })

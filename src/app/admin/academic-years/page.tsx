@@ -17,7 +17,13 @@ import {
   useUpdateAcademicYear,
 } from "@/hooks/use-academic-years";
 
-const defaultSemesters = ["Semester 1", "Semester 2"];
+const semesterOptions = [2, 3, 4];
+
+function buildSemesters(count: number) {
+  return Array.from({ length: count }, (_, index) => ({
+    name: `Semester ${index + 1}`,
+  }));
+}
 
 function buildAcademicYearName(startDate: string, endDate: string) {
   if (!startDate || !endDate) return "Academic year";
@@ -35,11 +41,13 @@ export default function AcademicYearsPage() {
   const deleteAcademicYear = useDeleteAcademicYear();
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [semesterCount, setSemesterCount] = useState(2);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   function resetForm() {
     setStartDate("");
     setEndDate("");
+    setSemesterCount(2);
     setEditingId(null);
   }
 
@@ -47,6 +55,11 @@ export default function AcademicYearsPage() {
     setEditingId(year.id);
     setStartDate(year.startDate ?? "");
     setEndDate(year.endDate ?? "");
+    setSemesterCount(
+      semesterOptions.includes(year.semesters.length)
+        ? year.semesters.length
+        : 2,
+    );
   }
 
   function handleDeleteYear(id: string) {
@@ -63,9 +76,7 @@ export default function AcademicYearsPage() {
       start_date: startDate,
       end_date: endDate,
       is_current: "true",
-      semesters: JSON.stringify(
-        defaultSemesters.map((semesterName) => ({ name: semesterName })),
-      ),
+      semesters: JSON.stringify(buildSemesters(semesterCount)),
     });
 
     resetForm();
@@ -84,9 +95,7 @@ export default function AcademicYearsPage() {
         end_date: endDate,
         is_current: "true",
         status: "active",
-        semesters: JSON.stringify(
-          defaultSemesters.map((semesterName) => ({ name: semesterName })),
-        ),
+        semesters: JSON.stringify(buildSemesters(semesterCount)),
       },
     });
 
@@ -133,13 +142,40 @@ export default function AcademicYearsPage() {
                 />
               </div>
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="year-semesters">Semesters</Label>
-                <Input
-                  id="year-semesters"
-                  value={defaultSemesters.join(", ")}
-                  disabled
-                  className="rounded-none bg-muted/40"
-                />
+                <div className="flex items-center justify-between">
+                  <Label>Number of semesters</Label>
+                  <span className="text-xs text-muted-foreground">
+                    {semesterCount} semesters
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {semesterOptions.map((count) => {
+                    const selected = semesterCount === count;
+                    return (
+                      <label
+                        key={count}
+                        className={`flex cursor-pointer items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${
+                          selected
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-input hover:border-primary"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="semester-count"
+                          value={count}
+                          checked={selected}
+                          onChange={() => setSemesterCount(count)}
+                          className="sr-only"
+                        />
+                        <span>{count}</span>
+                        <span className="text-xs">
+                          {count === 1 ? "semester" : "semesters"}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
