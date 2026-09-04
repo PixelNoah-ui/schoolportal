@@ -198,8 +198,11 @@ export interface TeacherRow {
   teacher_number: string;
   profile: Profile;
   subjects: string[];
+  classes?: string[];
+  assignments?: { subjectId: string; classId: string }[];
   classCount: number;
   phone: string;
+  gender?: "male" | "female" | null;
   temporaryPassword?: string;
 }
 

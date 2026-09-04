@@ -4,10 +4,36 @@ import { createClient } from "@/utils/supabase/client";
 type StudentRecord = {
   id: string;
   profile_id: string;
+  student_number: string;
+  temporary_password: string | null;
   phone: string | null;
   gender: "male" | "female" | null;
   date_of_birth: string | null;
   created_at: string;
+  student_enrollments:
+    | {
+        class_id: string;
+        status: string;
+        classes:
+          | {
+              name: string;
+              section: string | null;
+              grade_levels:
+                | { level_number: number }[]
+                | { level_number: number }
+                | null;
+            }
+          | {
+              name: string;
+              section: string | null;
+              grade_levels:
+                | { level_number: number }[]
+                | { level_number: number }
+                | null;
+            }[]
+          | null;
+      }[]
+    | null;
   profiles: Profile | Profile[] | null;
 };
 
@@ -23,18 +49,33 @@ function mapStudent(student: StudentRecord): AllStudentRow {
     email: "-",
     role: "student",
   };
+  const enrollment = student.student_enrollments?.find(
+    (item) => item.status === "active",
+  );
+  const classData = Array.isArray(enrollment?.classes)
+    ? (enrollment.classes[0] ?? null)
+    : (enrollment?.classes ?? null);
+  const grade = classData
+    ? Array.isArray(classData.grade_levels)
+      ? classData.grade_levels[0]?.level_number
+      : classData.grade_levels?.level_number
+    : undefined;
 
   return {
     id: student.id,
-    student_number: student.id.slice(0, 8).toUpperCase(),
+    student_number: student.student_number,
     profile,
-    className: "Unassigned",
+    className: classData
+      ? `Grade ${grade ?? "-"} - ${classData.section || classData.name}`
+      : "Unassigned",
     avgScore: 0,
     joined: new Date(student.created_at).toLocaleDateString(),
     phone: student.phone ?? "Not provided",
     gender: student.gender,
     dob: student.date_of_birth ?? "",
-    classId: "",
+    classId: enrollment?.class_id ?? "",
+    temporaryPassword: student.temporary_password ?? null,
+    gradeId: grade ? String(grade) : "",
   } as AllStudentRow & { gradeId: string };
 }
 
@@ -53,6 +94,8 @@ export interface StudentListResult {
 
 export async function fetchStudents({
   search = "",
+  classId,
+  academicYearId,
   page = 1,
   pageSize = 10,
 }: StudentListParams = {}): Promise<StudentListResult> {
@@ -63,7 +106,7 @@ export async function fetchStudents({
   let request = supabase
     .from("students")
     .select(
-      "id, profile_id, phone, gender, date_of_birth, created_at, profiles!students_profile_id_fkey(id, full_name, username, email, role)",
+      "id, profile_id, student_number, temporary_password, phone, gender, date_of_birth, created_at, profiles!students_profile_id_fkey!inner(id, full_name, username, email, role), student_enrollments!inner(class_id, status, classes(academic_year_id, name, section, grade_levels!classes_grade_level_id_fkey(level_number)))",
       { count: "exact" },
     )
     .order("created_at", { ascending: false })
@@ -73,6 +116,14 @@ export async function fetchStudents({
     request = request.or(
       `full_name.ilike.%${search.trim()}%,username.ilike.%${search.trim()}%`,
       { foreignTable: "profiles" },
+    );
+  }
+  if (classId && classId !== "all")
+    request = request.eq("student_enrollments.class_id", classId);
+  if (academicYearId && academicYearId !== "all") {
+    request = request.eq(
+      "student_enrollments.classes.academic_year_id",
+      academicYearId,
     );
   }
 
@@ -116,6 +167,21 @@ export async function updateStudent(
     .eq("id", id)
     .single();
   if (!student) throw new Error("Student not found");
+  if (payload.class_id) {
+    const { data: enrollment, error: enrollmentError } = await supabase
+      .from("student_enrollments")
+      .select("id")
+      .eq("student_id", id)
+      .eq("status", "active")
+      .maybeSingle();
+    if (enrollmentError) throw new Error(enrollmentError.message);
+    if (!enrollment) throw new Error("Student has no active enrollment");
+    const { error: classError } = await supabase
+      .from("student_enrollments")
+      .update({ class_id: payload.class_id })
+      .eq("id", enrollment.id);
+    if (classError) throw new Error(classError.message);
+  }
   const { error: profileError } = await supabase
     .from("profiles")
     .update({ full_name: payload.full_name, email: payload.email })

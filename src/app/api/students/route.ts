@@ -25,14 +25,14 @@ export async function POST(request: Request) {
   const email = String(body.email ?? "")
     .trim()
     .toLowerCase();
-  const gradeId = String(body.grade_id ?? "").trim();
+  const classId = String(body.class_id ?? "").trim();
   const gender = String(body.gender ?? "")
     .trim()
     .toLowerCase();
 
-  if (!fullName || !email || !gradeId)
+  if (!fullName || !email || !classId)
     return NextResponse.json(
-      { error: "Name, email, and grade are required" },
+      { error: "Name, email, and class are required" },
       { status: 400 },
     );
 
@@ -83,24 +83,42 @@ export async function POST(request: Request) {
     suffix += 1;
   }
 
-  const { data: gradeRecord, error: gradeError } = await admin
-    .from("grade_levels")
-    .select("id")
-    .eq("id", gradeId)
+  const { data: classRecord, error: classError } = await admin
+    .from("classes")
+    .select("id, academic_year_id")
+    .eq("id", classId)
     .maybeSingle();
 
-  if (gradeError) {
-    return NextResponse.json({ error: gradeError.message }, { status: 400 });
+  if (classError) {
+    return NextResponse.json({ error: classError.message }, { status: 400 });
   }
 
-  if (!gradeRecord) {
+  if (!classRecord) {
     return NextResponse.json(
-      { error: "Selected grade was not found" },
+      { error: "Selected class was not found" },
       { status: 400 },
     );
   }
 
+  const { data: semester, error: semesterError } = await admin
+    .from("semesters")
+    .select("id")
+    .eq("academic_year_id", classRecord.academic_year_id)
+    .order("start_date", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (semesterError || !semester)
+    return NextResponse.json(
+      { error: semesterError?.message ?? "Selected class has no semester" },
+      { status: 400 },
+    );
+
   const temporaryPassword = `${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}A1!`;
+  const studentNumber = `STU-${new Date().getFullYear()}-${crypto
+    .randomUUID()
+    .replace(/-/g, "")
+    .slice(0, 8)
+    .toUpperCase()}`;
 
   const { data: authData, error: authError } =
     await admin.auth.admin.createUser({
@@ -132,29 +150,43 @@ export async function POST(request: Request) {
     .insert({
       id: crypto.randomUUID(),
       profile_id: authData.user.id,
-      grade_id: gradeId,
-      class_id: body.class_id || null,
+      student_number: studentNumber,
+      temporary_password: temporaryPassword,
       phone: body.phone || null,
       date_of_birth: body.dob || null,
-      temporary_password: temporaryPassword,
       gender: gender || null,
     })
     .select(
-      "id, profile_id, phone, date_of_birth, temporary_password, created_at",
+      "id, profile_id, student_number, temporary_password, phone, date_of_birth, created_at",
     )
     .single();
   if (studentError) {
     await admin.auth.admin.deleteUser(authData.user.id);
     return NextResponse.json({ error: studentError.message }, { status: 400 });
   }
+  const { error: enrollmentError } = await admin
+    .from("student_enrollments")
+    .insert({
+      student_id: student.id,
+      class_id: classId,
+      semester_id: semester.id,
+    });
+  if (enrollmentError) {
+    await admin.from("students").delete().eq("id", student.id);
+    await admin.auth.admin.deleteUser(authData.user.id);
+    return NextResponse.json(
+      { error: enrollmentError.message },
+      { status: 400 },
+    );
+  }
   return NextResponse.json({
     id: student.id,
-    student_number: "",
-    className: "Unassigned",
+    student_number: student.student_number,
+    className: "",
     avgScore: 0,
     joined: "just now",
     dob: body.dob ?? "",
-    classId: "",
+    classId,
     profile: {
       id: authData.user.id,
       full_name: fullName,

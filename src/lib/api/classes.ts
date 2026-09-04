@@ -62,7 +62,7 @@ function mapClass(classRow: ClassRecord): ClassRow {
       assignments
         .flatMap((assignment) =>
           asArray(assignment.teachers).flatMap((teacherRow) =>
-            teacherRow.profiles.map((profile) => profile.full_name),
+            asArray(teacherRow.profiles).map((profile) => profile.full_name),
           ),
         )
         .filter(Boolean),
@@ -149,7 +149,7 @@ export async function fetchClassOptions({
   return (data ?? []).map((classRow) => ({
     id: classRow.id,
     name: classRow.name,
-    grade: classRow.grade_levels?.[0]?.level_number ?? 0,
+    grade: asArray(classRow.grade_levels)[0]?.level_number ?? 0,
     section: classRow.section ?? "",
   }));
 }

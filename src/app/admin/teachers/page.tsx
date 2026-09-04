@@ -32,6 +32,8 @@ import {
   useDeleteTeacher,
 } from "@/hooks/use-teachers";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useToastManager } from "@/components/ui/toast";
+import { PasswordCell } from "@/components/admin/password-cell";
 
 function initials(name: string) {
   return name
@@ -48,12 +50,23 @@ const editTeacherFields: FieldConfig[] = [
   { name: "phone", label: "Phone" },
 ];
 
+const viewTeacherFields: FieldConfig[] = [
+  { name: "full_name", label: "Full name" },
+  { name: "email", label: "Email", type: "email" },
+  { name: "username", label: "Username" },
+  { name: "phone", label: "Phone" },
+  { name: "subjects", label: "Subjects", fullWidth: true },
+  { name: "classes", label: "Classes", fullWidth: true },
+  { name: "temporary_password", label: "Temporary password", fullWidth: true },
+];
+
 export default function TeachersPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const search = searchParams.get("search") ?? "";
   const [searchInput, setSearchInput] = useState(search);
   const debouncedSearch = useDebouncedValue(searchInput);
+  const toastManager = useToastManager();
   const currentPage = Math.max(1, Number(searchParams.get("page") ?? "1"));
   const [addOpen, setAddOpen] = useState(false);
 
@@ -89,6 +102,29 @@ export default function TeachersPage() {
     router.replace("?");
   }
 
+  async function handleCreateTeacher(
+    values: Parameters<
+      React.ComponentProps<typeof TeacherFormDialog>["onSubmit"]
+    >[0],
+  ) {
+    try {
+      await createTeacher.mutateAsync(values);
+      setAddOpen(false);
+      toastManager.add({
+        title: "Teacher created",
+        description: "The teacher account was created successfully.",
+        type: "success",
+      });
+    } catch (error) {
+      toastManager.add({
+        title: "Could not create teacher",
+        description:
+          error instanceof Error ? error.message : "Failed to create teacher",
+        type: "error",
+      });
+    }
+  }
+
   return (
     <>
       <SiteHeader title="Teachers" />
@@ -99,7 +135,7 @@ export default function TeachersPage() {
             mode="add"
             open={addOpen}
             onOpenChange={setAddOpen}
-            onSubmit={(values) => createTeacher.mutateAsync(values)}
+            onSubmit={handleCreateTeacher}
             isLoading={createTeacher.isPending}
             trigger={
               <Button className="rounded-none">
@@ -155,23 +191,41 @@ export default function TeachersPage() {
                     {t.profile?.username ?? "-"}
                   </TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">
-                    {t.temporaryPassword ?? "-"}
+                    <PasswordCell value={t.temporaryPassword} />
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
-                      {t.subjects.map((s: string) => (
-                        <Badge
-                          key={s}
-                          variant="outline"
-                          className="rounded-none font-normal"
-                        >
-                          {s}
-                        </Badge>
-                      ))}
+                      {t.subjects.length === 0 ? (
+                        <span className="text-sm text-muted-foreground">-</span>
+                      ) : (
+                        t.subjects.map((s: string) => (
+                          <Badge
+                            key={s}
+                            variant="outline"
+                            className="rounded-none font-normal"
+                          >
+                            {s}
+                          </Badge>
+                        ))
+                      )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm tabular-nums">
-                    {t.classCount}
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {t.classes?.length ? (
+                        t.classes.map((className) => (
+                          <Badge
+                            key={className}
+                            variant="outline"
+                            className="rounded-none font-normal"
+                          >
+                            {className}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-sm text-muted-foreground">-</span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {t.phone}
@@ -180,15 +234,49 @@ export default function TeachersPage() {
                     <RowActions
                       entityName={t.profile?.full_name ?? "Unknown teacher"}
                       fields={editTeacherFields}
+                      viewFields={viewTeacherFields}
                       values={{
                         full_name: t.profile?.full_name ?? "",
                         email: t.profile?.email ?? "",
                         phone: t.phone,
+                        username: t.profile?.username ?? "",
+                        subjects: t.subjects.join(", ") || "-",
+                        classes: t.classes?.join(", ") || "-",
+                        temporary_password: t.temporaryPassword ?? "-",
                       }}
                       onEdit={(values) =>
                         updateTeacher.mutateAsync({ id: t.id, payload: values })
                       }
                       onDelete={() => deleteTeacher.mutateAsync(t.id)}
+                      renderEdit={(open, onOpenChange) => (
+                        <TeacherFormDialog
+                          key={`edit-${t.id}-${t.profile?.full_name}-${t.profile?.email}-${t.phone}-${t.assignments?.map((assignment) => `${assignment.classId}:${assignment.subjectId}`).join(",")}`}
+                          mode="edit"
+                          teacherId={t.id}
+                          open={open}
+                          onOpenChange={onOpenChange}
+                          initialValues={{
+                            full_name: t.profile?.full_name ?? "",
+                            email: t.profile?.email ?? "",
+                            phone: t.phone,
+                            gender: t.gender ?? "",
+                          }}
+                          initialAssignments={t.assignments ?? []}
+                          onSubmit={async (values) => {
+                            await updateTeacher.mutateAsync({
+                              id: t.id,
+                              payload: values,
+                            });
+                            toastManager.add({
+                              title: "Teacher updated",
+                              description:
+                                "Teacher information and assignments were updated.",
+                              type: "success",
+                            });
+                          }}
+                          isLoading={updateTeacher.isPending}
+                        />
+                      )}
                       editIsLoading={updateTeacher.isPending}
                       deleteIsLoading={deleteTeacher.isPending}
                     />

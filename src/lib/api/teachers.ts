@@ -18,10 +18,33 @@ type TeacherRecord = {
   phone: string | null;
   temporary_password: string | null;
   created_at: string;
+  gender: "male" | "female" | null;
   profiles: Profile | Profile[] | null;
   class_subjects: {
     class_id: string;
-    subjects: { name: string } | { name: string }[] | null;
+    subject_id: string;
+    subjects:
+      | { id: string; name: string }
+      | { id: string; name: string }[]
+      | null;
+    classes:
+      | {
+          name: string;
+          section: string | null;
+          grade_levels:
+            | { level_number: number }
+            | { level_number: number }[]
+            | null;
+        }
+      | {
+          name: string;
+          section: string | null;
+          grade_levels:
+            | { level_number: number }
+            | { level_number: number }[]
+            | null;
+        }[]
+      | null;
   }[];
 };
 
@@ -51,14 +74,31 @@ function mapTeacher(teacher: TeacherRecord): TeacherRow {
         .filter(Boolean),
     ),
   ];
+  const classNames = teacher.class_subjects.map((assignment) => {
+    const classData = Array.isArray(assignment.classes)
+      ? assignment.classes[0]
+      : assignment.classes;
+    if (!classData) return "";
+    const gradeLevels = Array.isArray(classData.grade_levels)
+      ? classData.grade_levels[0]
+      : classData.grade_levels;
+    return `Grade ${gradeLevels?.level_number ?? "-"} - ${classData.section || classData.name}`;
+  });
+  const assignments = teacher.class_subjects.map((assignment) => ({
+    subjectId: assignment.subject_id,
+    classId: assignment.class_id,
+  }));
 
   return {
     id: teacher.id,
     teacher_number: "",
     profile: normalizedProfile,
     subjects: [...new Set(subjects)],
+    classes: [...new Set(classNames.filter(Boolean))],
+    assignments,
     classCount: classIds.length,
     phone: teacher.phone ?? "",
+    gender: teacher.gender,
     temporaryPassword: teacher.temporary_password ?? undefined,
   };
 }
@@ -74,7 +114,7 @@ export async function fetchTeachers({
   let request = supabase
     .from("teachers")
     .select(
-      "id, profile_id, phone, temporary_password, created_at, profiles!teachers_profile_id_fkey(id, full_name, username, email, role), class_subjects(class_id, subjects(name))",
+      "id, profile_id, phone, gender, temporary_password, created_at, profiles!teachers_profile_id_fkey(id, full_name, username, email, role), class_subjects(class_id, subject_id, subjects(id, name), classes(name, section, grade_levels!classes_grade_level_id_fkey(level_number)))",
       { count: "exact" },
     )
     .order("created_at", { ascending: false })
@@ -127,6 +167,62 @@ export async function updateTeacher(
     .update({ full_name: payload.full_name, email: payload.email })
     .eq("id", teacher.profile_id);
   if (profileError) throw new Error(profileError.message);
+  if (Array.isArray(payload.assignments)) {
+    const assignments = payload.assignments as Array<{
+      subjectId: string;
+      classId: string;
+    }>;
+    const classIds = [
+      ...new Set(assignments.map((assignment) => assignment.classId)),
+    ];
+    const { data: classRows, error: classError } = await supabase
+      .from("classes")
+      .select("id, academic_year_id")
+      .in("id", classIds);
+    if (classError) throw new Error(classError.message);
+    const yearIds = [
+      ...new Set((classRows ?? []).map((row) => row.academic_year_id)),
+    ];
+    const { data: semesters, error: semesterError } = await supabase
+      .from("semesters")
+      .select("id, academic_year_id")
+      .in("academic_year_id", yearIds)
+      .order("ordinal", { ascending: true });
+    if (semesterError) throw new Error(semesterError.message);
+    const semesterByYear = new Map<string, string>();
+    for (const semester of semesters ?? []) {
+      if (!semesterByYear.has(semester.academic_year_id)) {
+        semesterByYear.set(semester.academic_year_id, semester.id);
+      }
+    }
+    const yearByClass = new Map(
+      (classRows ?? []).map((row) => [row.id, row.academic_year_id]),
+    );
+    const rows = assignments.map((assignment) => ({
+      class_id: assignment.classId,
+      subject_id: assignment.subjectId,
+      teacher_id: id,
+      semester_id: semesterByYear.get(
+        yearByClass.get(assignment.classId) ?? "",
+      ),
+    }));
+    if (rows.some((row) => !row.semester_id)) {
+      throw new Error(
+        "Could not find a semester for one of the selected classes",
+      );
+    }
+    const { error: deleteError } = await supabase
+      .from("class_subjects")
+      .delete()
+      .eq("teacher_id", id);
+    if (deleteError) throw new Error(deleteError.message);
+    if (rows.length) {
+      const { error: assignmentError } = await supabase
+        .from("class_subjects")
+        .upsert(rows, { onConflict: "class_id,subject_id,semester_id" });
+      if (assignmentError) throw new Error(assignmentError.message);
+    }
+  }
   return { id, ...payload };
 }
 

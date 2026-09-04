@@ -36,7 +36,6 @@ import {
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useAcademicYears } from "@/hooks/use-academic-years";
 import { useClassOptions } from "@/hooks/use-classes";
-import { useGradeOptions } from "@/hooks/use-grades";
 import { useToastManager } from "@/components/ui/toast";
 import {
   useStudents,
@@ -62,7 +61,6 @@ export default function StudentsPage() {
   const debouncedSearch = useDebouncedValue(searchInput);
   const classFilter = searchParams.get("class") ?? "all";
   const { data: academicYears = [] } = useAcademicYears();
-  const { data: gradeOptions = [] } = useGradeOptions();
   const currentAcademicYearId =
     academicYears.find((year) => year.isCurrent)?.id ?? "all";
   const currentAcademicYearName =
@@ -76,6 +74,30 @@ export default function StudentsPage() {
   const currentPage = Math.max(1, Number(searchParams.get("page") ?? "1"));
   const [addOpen, setAddOpen] = useState(false);
 
+  const { data: filteredClassOptions = [] } = useClassOptions({
+    academicYearId:
+      selectedAcademicYearId === "all" ? undefined : selectedAcademicYearId,
+  });
+  const classFilterOptions = filteredClassOptions.map((classOption) => ({
+    label: `Grade ${classOption.grade} - ${classOption.section || "Unassigned"}`,
+    value: classOption.id,
+  }));
+  const selectedClassId =
+    classFilter === "all"
+      ? "all"
+      : (classFilterOptions.find(
+          (option) =>
+            option.label === classFilter || option.value === classFilter,
+        )?.value ?? "all");
+  const visibleClassFilter =
+    classFilterOptions.find((option) => option.value === classFilter)?.label ??
+    classFilter;
+  const { data, isLoading, isFetching } = useStudents({
+    search: debouncedSearch,
+    classId: selectedClassId,
+    academicYearId: selectedAcademicYearId,
+    page: currentPage,
+  });
   const studentFields: FieldConfig[] = [
     { name: "full_name", label: "Full name", fullWidth: true },
     { name: "email", label: "Email", type: "email" },
@@ -91,37 +113,40 @@ export default function StudentsPage() {
       ],
     },
     {
-      name: "grade_id",
-      label: "Grade",
+      name: "class_id",
+      label: "Class",
       type: "select",
-      options: gradeOptions.map((grade: { id: string; name: string }) => ({
-        label: grade.name,
-        value: grade.id,
-      })),
+      options: classFilterOptions,
       fullWidth: true,
     },
   ];
-
-  const { data, isLoading } = useStudents({
-    search: debouncedSearch,
-    classId: classFilter,
-    academicYearId: selectedAcademicYearId,
-    page: currentPage,
-  });
-  const { data: filteredClassOptions = [] } = useClassOptions({
-    academicYearId:
-      selectedAcademicYearId === "all" ? undefined : selectedAcademicYearId,
-  });
   const createStudent = useCreateStudent();
   const updateStudent = useUpdateStudent();
   const deleteStudent = useDeleteStudent();
 
   const handleCreateStudent = async (values: Record<string, string>) => {
-    try {
-      await createStudent.mutateAsync({
-        ...values,
-        grade_id: values.grade_id || "",
+    const payload = Object.fromEntries(
+      Object.entries(values).map(([key, value]) => [key, value.trim()]),
+    );
+    const missingField = ["full_name", "email", "class_id"].find(
+      (field) => !payload[field],
+    );
+    if (missingField) {
+      const labels: Record<string, string> = {
+        full_name: "Name",
+        email: "Email",
+        class_id: "Class",
+      };
+      toastManager.add({
+        title: "Required field missing",
+        description: `${labels[missingField]} is required.`,
+        type: "error",
       });
+      return;
+    }
+
+    try {
+      await createStudent.mutateAsync(payload);
       setAddOpen(false);
       toastManager.add({
         title: "Student created",
@@ -248,11 +273,11 @@ export default function StudentsPage() {
             searchValue={searchInput}
             onSearchChange={setSearchInput}
             searchPlaceholder="Search by name or username"
-            filterOptions={filteredClassOptions.map((c) => ({
-              label: `Grade ${c.grade} - ${c.section || "Unassigned"}`,
-              value: c.id,
+            filterOptions={classFilterOptions.map((option) => ({
+              label: option.label,
+              value: option.label,
             }))}
-            filterValue={classFilter}
+            filterValue={visibleClassFilter}
             onFilterChange={(value) => updateQuery("class", value)}
             filterLabel="All Classes"
           />
@@ -290,7 +315,7 @@ export default function StudentsPage() {
             </TableRow>
           </TableHeader>
 
-          {isLoading ? (
+          {isLoading || isFetching ? (
             <TableSkeleton rows={6} columns={9} />
           ) : (
             <TableBody>
@@ -356,6 +381,7 @@ export default function StudentsPage() {
                           dob: s.dob,
                           gender: s.gender ?? "",
                           grade_id: gradeId,
+                          class_id: s.classId,
                         }}
                         onEdit={(values) => handleUpdateStudent(s.id, values)}
                         onDelete={() => handleDeleteStudent(s.id)}

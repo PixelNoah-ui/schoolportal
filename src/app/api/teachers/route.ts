@@ -176,13 +176,31 @@ export async function POST(request: Request) {
       }),
     );
 
+    if (assignmentsWithSemester.some((assignment) => !assignment.semester_id)) {
+      await admin.from("teachers").delete().eq("id", teacherId);
+      await admin.from("profiles").delete().eq("id", authData.user.id);
+      await admin.auth.admin.deleteUser(authData.user.id);
+      return NextResponse.json(
+        { error: "Could not find a semester for one of the selected classes" },
+        { status: 400 },
+      );
+    }
+
     const { error: assignmentError } = await admin
       .from("class_subjects")
-      .insert(assignmentsWithSemester);
+      .upsert(assignmentsWithSemester, {
+        onConflict: "class_id,subject_id,semester_id",
+      });
 
     if (assignmentError) {
       console.error("Warning: Failed to create assignments:", assignmentError);
-      // Don't fail the entire creation if assignments fail
+      await admin.from("teachers").delete().eq("id", teacherId);
+      await admin.from("profiles").delete().eq("id", authData.user.id);
+      await admin.auth.admin.deleteUser(authData.user.id);
+      return NextResponse.json(
+        { error: assignmentError.message },
+        { status: 400 },
+      );
     }
   }
 

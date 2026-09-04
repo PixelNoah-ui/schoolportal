@@ -95,6 +95,7 @@ create table public.grade_levels (
 create table public.teachers (
   id uuid primary key default gen_random_uuid(),
   profile_id uuid not null unique references public.profiles(id) on delete cascade,
+  temporary_password text,
   phone text,
   bio text,
   department text,
@@ -107,6 +108,7 @@ create table public.students (
   id uuid primary key default gen_random_uuid(),
   profile_id uuid not null unique references public.profiles(id) on delete cascade,
   student_number text not null unique check (student_number ~ '^[A-Za-z0-9-]{1,40}$'),
+  temporary_password text,
   phone text,
   gender text,
   date_of_birth date,

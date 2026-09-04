@@ -68,112 +68,151 @@ export function EntityFormDialog({
   );
   const readOnly = mode === "view";
 
-  async function handleSubmit() {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     if (isLoading) return;
-    await Promise.resolve(onSubmit(values));
+    event.preventDefault();
+    const formValues = Object.fromEntries(
+      Array.from(new FormData(event.currentTarget).entries()).map(
+        ([key, value]) => [key, String(value)],
+      ),
+    );
+    await Promise.resolve(onSubmit(formValues));
     setOpen(false);
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {trigger && <DialogTrigger render={trigger} />}
-      <DialogContent className="rounded-none sm:max-w-md">
+      <DialogContent
+        className={`rounded-none ${mode === "view" ? "sm:max-w-2xl" : "sm:max-w-md"}`}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
-        <div
-          className={`grid gap-4 py-2 ${columns === 2 ? "sm:grid-cols-2" : "grid-cols-1"}`}
-        >
-          {fields.map((f) => (
-            <div
-              key={f.name}
-              className={`space-y-2 ${columns === 2 && f.fullWidth ? "sm:col-span-2" : ""}`}
-            >
-              <Label htmlFor={f.name}>{f.label}</Label>
-              {f.type === "radio" ? (
-                <div className="flex gap-5 pt-1">
-                  {(f.options ?? []).map((option) => (
-                    <label
-                      key={option.value}
-                      className="flex items-center gap-2 text-sm"
-                    >
-                      <input
-                        type="radio"
-                        name={f.name}
-                        value={option.value}
-                        checked={values[f.name] === option.value}
-                        disabled={readOnly}
-                        onChange={(e) =>
-                          setValues((prev) => ({
-                            ...prev,
-                            [f.name]: e.target.value,
-                          }))
-                        }
-                        className="size-4 accent-primary"
-                      />
-                      {option.label}
-                    </label>
-                  ))}
+        {readOnly ? (
+          <div
+            className={`grid gap-3 py-2 ${columns === 2 ? "sm:grid-cols-2" : "grid-cols-1"}`}
+          >
+            {fields.map((field) => (
+              <div
+                key={field.name}
+                className={`space-y-1 border bg-muted/20 px-3 py-2 ${columns === 2 && field.fullWidth ? "sm:col-span-2" : ""}`}
+              >
+                <Label className="text-xs text-muted-foreground">
+                  {field.label}
+                </Label>
+                <div className="wrap-break-word text-sm font-medium">
+                  {initialValues?.[field.name] || "-"}
                 </div>
-              ) : f.type === "select" ? (
-                <select
-                  id={f.name}
-                  value={values[f.name] ?? ""}
-                  disabled={readOnly}
-                  onChange={(e) =>
-                    setValues((prev) => ({ ...prev, [f.name]: e.target.value }))
-                  }
-                  className="flex h-10 w-full rounded-none border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <option value="">Select {f.label}</option>
-                  {(f.options ?? []).map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <Input
-                  id={f.name}
-                  type={f.type ?? "text"}
-                  value={values[f.name]}
-                  disabled={readOnly}
-                  onChange={(e) =>
-                    setValues((prev) => ({ ...prev, [f.name]: e.target.value }))
-                  }
+              </div>
+            ))}
+          </div>
+        ) : (
+          <form
+            onSubmit={handleSubmit}
+            className={`grid gap-4 py-2 ${columns === 2 ? "sm:grid-cols-2" : "grid-cols-1"}`}
+          >
+            {fields.map((f) => (
+              <div
+                key={f.name}
+                className={`space-y-2 ${columns === 2 && f.fullWidth ? "sm:col-span-2" : ""}`}
+              >
+                <Label htmlFor={f.name}>{f.label}</Label>
+                {f.type === "radio" ? (
+                  <div className="flex gap-5 pt-1">
+                    {(f.options ?? []).map((option) => (
+                      <label
+                        key={option.value}
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        <input
+                          type="radio"
+                          name={f.name}
+                          value={option.value}
+                          checked={values[f.name] === option.value}
+                          disabled={readOnly}
+                          onChange={(e) =>
+                            setValues((prev) => ({
+                              ...prev,
+                              [f.name]: e.target.value,
+                            }))
+                          }
+                          className="size-4 accent-primary"
+                        />
+                        {option.label}
+                      </label>
+                    ))}
+                  </div>
+                ) : f.type === "select" ? (
+                  <select
+                    id={f.name}
+                    name={f.name}
+                    value={values[f.name] ?? ""}
+                    disabled={readOnly}
+                    onChange={(e) =>
+                      setValues((prev) => ({
+                        ...prev,
+                        [f.name]: e.target.value,
+                      }))
+                    }
+                    className="flex h-10 w-full rounded-none border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="">Select {f.label}</option>
+                    {(f.options ?? []).map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <Input
+                    id={f.name}
+                    name={f.name}
+                    type={f.type ?? "text"}
+                    value={values[f.name]}
+                    disabled={readOnly}
+                    onChange={(e) =>
+                      setValues((prev) => ({
+                        ...prev,
+                        [f.name]: e.target.value,
+                      }))
+                    }
+                    className="rounded-none"
+                  />
+                )}
+              </div>
+            ))}
+            {!readOnly && (
+              <DialogFooter className="sm:col-span-2">
+                <Button
+                  type="button"
+                  variant="outline"
                   className="rounded-none"
-                />
-              )}
-            </div>
-          ))}
-        </div>
-        {!readOnly && (
-          <DialogFooter>
-            <Button
-              variant="outline"
-              className="rounded-none"
-              onClick={() => setOpen(false)}
-              disabled={isLoading}
-            >
-              Cancel
-            </Button>
-            <Button
-              className="rounded-none"
-              onClick={handleSubmit}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  {submitLabel ??
-                    (mode === "add" ? "Creating..." : "Saving...")}
-                </>
-              ) : (
-                (submitLabel ?? (mode === "add" ? "Create" : "Save changes"))
-              )}
-            </Button>
-          </DialogFooter>
+                  onClick={() => setOpen(false)}
+                  disabled={isLoading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="rounded-none"
+                  type="submit"
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      {submitLabel ??
+                        (mode === "add" ? "Creating..." : "Saving...")}
+                    </>
+                  ) : (
+                    (submitLabel ??
+                    (mode === "add" ? "Create" : "Save changes"))
+                  )}
+                </Button>
+              </DialogFooter>
+            )}
+          </form>
         )}
       </DialogContent>
     </Dialog>

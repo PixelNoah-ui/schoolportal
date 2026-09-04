@@ -24,6 +24,11 @@ interface TeacherFormDialogProps {
   onSubmit: (values: TeacherFormValues) => Promise<unknown> | unknown;
   isLoading?: boolean;
   trigger?: React.ReactElement;
+  initialValues?: Partial<
+    Pick<TeacherFormValues, "full_name" | "email" | "phone" | "gender">
+  >;
+  initialAssignments?: TeacherAssignment[];
+  teacherId?: string;
 }
 
 interface Subject {
@@ -36,6 +41,7 @@ interface ClassOption {
   name: string;
   grade: number;
   section: string | null;
+  subjectIds: string[];
 }
 
 interface TeacherAssignment {
@@ -64,17 +70,18 @@ export function TeacherFormDialog({
   onSubmit,
   isLoading = false,
   trigger,
+  initialValues,
+  initialAssignments = [],
+  teacherId,
 }: TeacherFormDialogProps) {
-  void mode;
-
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
 
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [gender, setGender] = useState("");
+  const [fullName, setFullName] = useState(initialValues?.full_name ?? "");
+  const [email, setEmail] = useState(initialValues?.email ?? "");
+  const [phone, setPhone] = useState(initialValues?.phone ?? "");
+  const [gender, setGender] = useState(initialValues?.gender ?? "");
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [classes, setClasses] = useState<ClassOption[]>([]);
@@ -82,19 +89,62 @@ export function TeacherFormDialog({
   const [selectedGrade, setSelectedGrade] = useState<number | null>(null);
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedSubject, setSelectedSubject] = useState("");
-  const [assignments, setAssignments] = useState<TeacherAssignment[]>([]);
+  const [assignments, setAssignments] =
+    useState<TeacherAssignment[]>(initialAssignments);
 
-  const [classSubjects, setClassSubjects] = useState<Record<string, Subject[]>>(
-    {},
-  );
   const [loadingOptions, setLoadingOptions] = useState(false);
-  const [loadingClassSubjects, setLoadingClassSubjects] = useState(false);
+  const [loadingTeacher, setLoadingTeacher] = useState(false);
 
   useEffect(() => {
     if (open && subjects.length === 0 && classes.length === 0) {
       loadSubjectsAndClasses();
     }
   }, [open, subjects.length, classes.length]);
+
+  useEffect(() => {
+    if (!open || mode !== "edit" || !teacherId) return;
+    loadTeacherFromBackend(teacherId);
+  }, [open, mode, teacherId]);
+
+  async function loadTeacherFromBackend(id: string) {
+    setLoadingTeacher(true);
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("teachers")
+        .select(
+          "phone, gender, profiles!teachers_profile_id_fkey(full_name, email), class_subjects(subject_id, class_id, subjects(id, name))",
+        )
+        .eq("id", id)
+        .single();
+      if (error) throw error;
+
+      const profile = Array.isArray(data.profiles)
+        ? data.profiles[0]
+        : data.profiles;
+      setFullName(profile?.full_name ?? "");
+      setEmail(profile?.email ?? "");
+      setPhone(data.phone ?? "");
+      setGender(data.gender ?? "");
+      setAssignments(
+        (data.class_subjects ?? []).map((assignment) => {
+          const subjectData = assignment.subjects as unknown;
+          const subject = Array.isArray(subjectData)
+            ? (subjectData[0] as { name?: string } | undefined)
+            : (subjectData as { name?: string } | null);
+          return {
+            subjectId: assignment.subject_id,
+            classId: assignment.class_id,
+            subjectName: subject?.name,
+          };
+        }),
+      );
+    } catch (error) {
+      console.error("Error loading teacher:", error);
+    } finally {
+      setLoadingTeacher(false);
+    }
+  }
 
   async function loadSubjectsAndClasses() {
     setLoadingOptions(true);
@@ -104,12 +154,39 @@ export function TeacherFormDialog({
         supabase.from("subjects").select("id, name").order("name"),
         supabase
           .from("classes")
-          .select("id, name, grade, section")
-          .order("grade", { ascending: true }),
+          .select(
+            "id, name, section, grade_levels!classes_grade_level_id_fkey(level_number), class_subjects(subject_id)",
+          )
+          .order("section", { ascending: true }),
       ]);
 
       if (subjectsRes.data) setSubjects(subjectsRes.data as Subject[]);
-      if (classesRes.data) setClasses(classesRes.data as ClassOption[]);
+      if (classesRes.data) {
+        setClasses(
+          (classesRes.data as Array<Record<string, unknown>>).map(
+            (classRow) => {
+              const gradeLevels = classRow.grade_levels as
+                | { level_number: number }
+                | { level_number: number }[]
+                | null;
+              const classSubjects = (classRow.class_subjects ?? []) as Array<{
+                subject_id: string;
+              }>;
+              return {
+                id: String(classRow.id),
+                name: String(classRow.name),
+                grade: Array.isArray(gradeLevels)
+                  ? (gradeLevels[0]?.level_number ?? 0)
+                  : (gradeLevels?.level_number ?? 0),
+                section: classRow.section as string | null,
+                subjectIds: classSubjects.map(
+                  (assignment) => assignment.subject_id,
+                ),
+              };
+            },
+          ) as ClassOption[],
+        );
+      }
     } catch (error) {
       console.error("Error loading options:", error);
     } finally {
@@ -131,46 +208,33 @@ export function TeacherFormDialog({
     return map;
   }, [classes]);
 
-  const sectionsForSelectedGrade =
-    selectedGrade !== null ? (classesByGrade[selectedGrade] ?? []) : [];
-
-  const selectedClassInfo = classes.find((c) => c.id === selectedClass);
-
-  async function fetchClassSubjects(classId: string) {
-    if (classSubjects[classId]) return;
-    setLoadingClassSubjects(true);
-    try {
-      const supabase = createClient();
-      const { data } = await supabase
-        .from("class_subjects")
-        .select("subject_id, subjects(id, name)")
-        .eq("class_id", classId);
-      setClassSubjects((previous) => ({
-        ...previous,
-        [classId]: (data ?? []).map((row) => row.subjects).flat() as Subject[],
-      }));
-    } finally {
-      setLoadingClassSubjects(false);
-    }
-  }
+  const classesForSelectedGrade = useMemo(
+    () => (selectedGrade !== null ? (classesByGrade[selectedGrade] ?? []) : []),
+    [classesByGrade, selectedGrade],
+  );
+  const subjectsForSelectedGrade = useMemo(() => {
+    const subjectIds = new Set(
+      classesForSelectedGrade.flatMap((classItem) => classItem.subjectIds),
+    );
+    return subjects.filter((subject) => subjectIds.has(subject.id));
+  }, [classesForSelectedGrade, subjects]);
+  const classesForSelectedSubject = classesForSelectedGrade.filter(
+    (classItem) => classItem.subjectIds.includes(selectedSubject),
+  );
 
   function handleSelectGrade(grade: number) {
     setSelectedGrade(grade);
     setSelectedSubject("");
-    const sectionsInGrade = classesByGrade[grade] ?? [];
-    if (sectionsInGrade.length === 1) {
-      const onlyClass = sectionsInGrade[0].id;
-      setSelectedClass(onlyClass);
-      fetchClassSubjects(onlyClass);
-    } else {
-      setSelectedClass("");
-    }
+    setSelectedClass("");
+  }
+
+  function handleSelectSubject(subjectId: string) {
+    setSelectedSubject(subjectId);
+    setSelectedClass("");
   }
 
   function handleSelectClass(classId: string) {
     setSelectedClass(classId);
-    setSelectedSubject("");
-    fetchClassSubjects(classId);
   }
 
   function addAssignments() {
@@ -247,9 +311,13 @@ export function TeacherFormDialog({
       {trigger && <DialogTrigger render={trigger} />}
       <DialogContent className="max-h-[75vh] overflow-y-auto rounded-none sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle className="text-base">Add Teacher</DialogTitle>
+          <DialogTitle className="text-base">
+            {mode === "edit" ? "Edit Teacher" : "Add Teacher"}
+          </DialogTitle>
           <DialogDescription className="text-xs">
-            Create a new teacher and assign subjects and classes.
+            {mode === "edit"
+              ? "Update teacher information and teaching assignments."
+              : "Create a new teacher and assign subjects and classes."}
           </DialogDescription>
         </DialogHeader>
 
@@ -341,7 +409,11 @@ export function TeacherFormDialog({
               </p>
             </div>
 
-            {loadingOptions ? (
+            {loadingTeacher ? (
+              <p className="text-xs text-muted-foreground">
+                Loading teacher information...
+              </p>
+            ) : loadingOptions ? (
               <p className="text-xs text-muted-foreground">Loading grades…</p>
             ) : (
               <div className="space-y-2.5">
@@ -369,74 +441,64 @@ export function TeacherFormDialog({
                   </div>
                 </div>
 
-                {/* Step 2: Section (only if the grade has more than one) */}
-                {selectedGrade !== null &&
-                  sectionsForSelectedGrade.length > 1 && (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">2. Select section</Label>
-                      <div className="flex flex-wrap gap-1.5">
-                        {sectionsForSelectedGrade.map((classItem) => {
-                          const active = selectedClass === classItem.id;
-                          return (
-                            <button
-                              key={classItem.id}
-                              type="button"
-                              onClick={() => handleSelectClass(classItem.id)}
-                              className={`border px-2 py-1 text-xs transition-colors ${
-                                active
-                                  ? "border-primary bg-primary text-primary-foreground"
-                                  : "hover:border-primary"
-                              }`}
-                            >
-                              {classItem.section
-                                ? `Sec. ${classItem.section}`
-                                : classItem.name}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                {/* Step 3: Subject */}
-                {selectedClass && (
+                {/* Step 2: Subject offered by the selected grade */}
+                {selectedGrade !== null && (
                   <div className="space-y-1.5">
-                    <Label className="text-xs">
-                      {sectionsForSelectedGrade.length > 1 ? "3" : "2"}. Select
-                      subject
-                      {selectedClassInfo && (
-                        <span className="ml-1 font-normal text-muted-foreground">
-                          — {getClassName(selectedClassInfo.id)}
-                        </span>
-                      )}
-                    </Label>
+                    <Label className="text-xs">2. Select subject</Label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {subjectsForSelectedGrade.map((subject) => (
+                        <button
+                          key={subject.id}
+                          type="button"
+                          onClick={() => handleSelectSubject(subject.id)}
+                          className={`border px-2 py-1 text-xs transition-colors ${
+                            selectedSubject === subject.id
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "hover:border-primary"
+                          }`}
+                        >
+                          {subject.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-                    {loadingClassSubjects ? (
-                      <p className="text-xs text-muted-foreground">
-                        Loading subjects…
-                      </p>
-                    ) : (classSubjects[selectedClass] ?? []).length === 0 ? (
+                {/* Step 3: Classes offering the selected subject */}
+                {selectedSubject && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">3. Select class</Label>
+                    {classesForSelectedSubject.length === 0 ? (
                       <div className="flex items-center gap-2 border border-dashed bg-muted/20 px-2.5 py-2 text-xs text-muted-foreground">
                         <BookX className="size-3.5 shrink-0" />
-                        Subject is not available for this class yet.
+                        No class offers this subject.
                       </div>
                     ) : (
-                      <div className="flex max-h-20 flex-wrap gap-1.5 overflow-y-auto">
-                        {(classSubjects[selectedClass] ?? []).map((subject) => {
-                          const active = selectedSubject === subject.id;
+                      <div className="grid max-h-28 gap-1.5 overflow-y-auto">
+                        {classesForSelectedSubject.map((classItem) => {
+                          const active = selectedClass === classItem.id;
                           return (
-                            <button
-                              key={subject.id}
-                              type="button"
-                              onClick={() => setSelectedSubject(subject.id)}
-                              className={`border px-2 py-1 text-xs transition-colors ${
+                            <label
+                              key={classItem.id}
+                              className={`flex cursor-pointer items-center gap-2 border px-2.5 py-2 text-xs transition-colors ${
                                 active
-                                  ? "border-primary bg-primary text-primary-foreground"
+                                  ? "border-primary bg-primary/5 text-primary"
                                   : "hover:border-primary"
                               }`}
                             >
-                              {subject.name}
-                            </button>
+                              <input
+                                type="radio"
+                                name="teaching-class"
+                                value={classItem.id}
+                                checked={active}
+                                onChange={() => handleSelectClass(classItem.id)}
+                                className="size-3.5 accent-primary"
+                              />
+                              <span>
+                                Grade {classItem.grade} -{" "}
+                                {classItem.section || classItem.name}
+                              </span>
+                            </label>
                           );
                         })}
                       </div>
@@ -512,8 +574,10 @@ export function TeacherFormDialog({
             {isLoading ? (
               <>
                 <Loader2 className="size-3.5 animate-spin" />
-                Creating Teacher...
+                {mode === "edit" ? "Saving changes..." : "Creating Teacher..."}
               </>
+            ) : mode === "edit" ? (
+              "Save changes"
             ) : (
               "Create Teacher"
             )}

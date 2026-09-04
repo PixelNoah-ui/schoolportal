@@ -2,6 +2,7 @@
 "use client";
 
 import { useState } from "react";
+import type { ReactNode } from "react";
 import { Eye, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +17,12 @@ import { ConfirmDeleteDialog } from "./confirm-delete-dialog";
 interface RowActionsProps {
   entityName?: string;
   fields?: FieldConfig[];
+  viewFields?: FieldConfig[];
+  viewColumns?: 1 | 2;
+  renderEdit?: (
+    open: boolean,
+    onOpenChange: (open: boolean) => void,
+  ) => ReactNode;
   values?: Record<string, string>;
   onEdit?: (values: Record<string, string>) => Promise<unknown> | unknown;
   onDelete?: () => Promise<unknown> | unknown;
@@ -26,6 +33,9 @@ interface RowActionsProps {
 export function RowActions({
   entityName,
   fields,
+  viewFields,
+  viewColumns = 2,
+  renderEdit,
   values,
   onEdit,
   onDelete,
@@ -37,7 +47,7 @@ export function RowActions({
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const canRenderMenu = Boolean(entityName && values && onDelete);
-  const canRenderView = Boolean(fields && values && entityName);
+  const canRenderView = Boolean((viewFields ?? fields) && values && entityName);
 
   return (
     <div className="flex justify-end">
@@ -86,18 +96,19 @@ export function RowActions({
       </DropdownMenu>
       {canRenderMenu && (
         <>
-          {canRenderView && entityName && fields && values && (
+          {canRenderView && entityName && (viewFields ?? fields) && values && (
             <EntityFormDialog
               mode="view"
               title={entityName}
-              fields={fields as FieldConfig[]}
+              fields={(viewFields ?? fields) as FieldConfig[]}
+              columns={viewColumns}
               initialValues={values}
               onSubmit={() => {}}
               open={viewOpen}
               onOpenChange={setViewOpen}
             />
           )}
-          {onEdit && entityName && fields && values && (
+          {onEdit && entityName && fields && values && !renderEdit && (
             <EntityFormDialog
               mode="edit"
               title={`Edit ${entityName}`}
@@ -110,6 +121,7 @@ export function RowActions({
               submitLabel="Save changes"
             />
           )}
+          {renderEdit?.(editOpen, setEditOpen)}
           {onDelete && entityName && (
             <ConfirmDeleteDialog
               name={entityName}
