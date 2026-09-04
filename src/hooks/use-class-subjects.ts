@@ -41,10 +41,12 @@ export function useAddClassSubject(classId: string) {
     mutationFn: ({
       subjectId,
       teacherId,
+      semesterId,
     }: {
       subjectId: string;
       teacherId?: string | null;
-    }) => addClassSubject({ classId, subjectId, teacherId }),
+      semesterId?: string;
+    }) => addClassSubject({ classId, subjectId, teacherId, semesterId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: classSubjectsKey(classId) });
       queryClient.invalidateQueries({ queryKey: ["classes"] });

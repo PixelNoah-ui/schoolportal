@@ -24,21 +24,19 @@ export async function signIn(input: LoginInput) {
     throw new Error(error.message);
   }
 
-  const metadataRole = toUserRole(data.user.user_metadata?.role);
-  if (metadataRole) {
-    return { ...data, role: metadataRole };
+  const { data: profileRoleValue, error: profileError } =
+    await supabase.rpc("current_user_role");
+
+  if (profileError) {
+    throw new Error(
+      `Could not load your account profile: ${profileError.message}`,
+    );
   }
 
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", data.user.id)
-    .maybeSingle();
-  const profileRole = toUserRole(profile?.role);
-
-  if (profileError || !profileRole) {
+  const profileRole = toUserRole(profileRoleValue);
+  if (!profileRole) {
     throw new Error(
-      "Your account has no valid role. Add admin, teacher, or student to your profiles.role or user metadata.",
+      "Your account has no valid role. Ask an administrator to set your profiles.role to admin, teacher, or student.",
     );
   }
 

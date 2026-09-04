@@ -22,6 +22,8 @@ export default function PaginationBar({
 }: paginatiotProps) {
   const searchParams = useSearchParams();
 
+  if (totalPage < 2) return null;
+
   function getLink(page: number) {
     const newSearchParams = new URLSearchParams(searchParams);
     newSearchParams.set("page", page.toString());

@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useToastManager } from "@/components/ui/toast";
 import {
   useAcademicYears,
   useCreateAcademicYear,
@@ -39,6 +41,7 @@ export default function AcademicYearsPage() {
   const createAcademicYear = useCreateAcademicYear();
   const updateAcademicYear = useUpdateAcademicYear();
   const deleteAcademicYear = useDeleteAcademicYear();
+  const toastManager = useToastManager();
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [semesterCount, setSemesterCount] = useState(2);
@@ -62,44 +65,91 @@ export default function AcademicYearsPage() {
     );
   }
 
-  function handleDeleteYear(id: string) {
-    deleteAcademicYear.mutate(id);
+  async function handleDeleteYear(id: string) {
+    try {
+      await deleteAcademicYear.mutateAsync(id);
+      toastManager.add({
+        title: "Academic year deleted",
+        description: "The academic year and its related records were deleted.",
+        type: "success",
+      });
+    } catch (error) {
+      toastManager.add({
+        title: "Could not delete academic year",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to delete academic year",
+        type: "error",
+      });
+      throw error;
+    }
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!startDate || !endDate) return;
 
     const generatedName = buildAcademicYearName(startDate, endDate);
 
-    createAcademicYear.mutate({
-      name: generatedName,
-      start_date: startDate,
-      end_date: endDate,
-      is_current: "true",
-      semesters: JSON.stringify(buildSemesters(semesterCount)),
-    });
-
-    resetForm();
-  };
-
-  const handleUpdate = () => {
-    if (!editingId || !startDate || !endDate) return;
-
-    const generatedName = buildAcademicYearName(startDate, endDate);
-
-    updateAcademicYear.mutate({
-      id: editingId,
-      payload: {
+    try {
+      await createAcademicYear.mutateAsync({
         name: generatedName,
         start_date: startDate,
         end_date: endDate,
         is_current: "true",
-        status: "active",
         semesters: JSON.stringify(buildSemesters(semesterCount)),
-      },
-    });
+      });
+      resetForm();
+      toastManager.add({
+        title: "Academic year created",
+        description: `${generatedName} is now the active academic year.`,
+        type: "success",
+      });
+    } catch (error) {
+      toastManager.add({
+        title: "Could not create academic year",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to create academic year",
+        type: "error",
+      });
+    }
+  };
 
-    resetForm();
+  const handleUpdate = async () => {
+    if (!editingId || !startDate || !endDate) return;
+
+    const generatedName = buildAcademicYearName(startDate, endDate);
+
+    try {
+      await updateAcademicYear.mutateAsync({
+        id: editingId,
+        payload: {
+          name: generatedName,
+          start_date: startDate,
+          end_date: endDate,
+          is_current: "true",
+          status: "active",
+          semesters: JSON.stringify(buildSemesters(semesterCount)),
+        },
+      });
+      resetForm();
+      toastManager.add({
+        title: "Academic year updated",
+        description: `${generatedName} was updated successfully.`,
+        type: "success",
+      });
+    } catch (error) {
+      toastManager.add({
+        title: "Could not update academic year",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to update academic year",
+        type: "error",
+      });
+    }
   };
 
   const isSubmitting =
@@ -218,9 +268,25 @@ export default function AcademicYearsPage() {
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {isLoading ? (
-            <div className="rounded-none border p-6 text-sm text-muted-foreground">
-              Loading academic years...
-            </div>
+            Array.from({ length: 3 }).map((_, index) => (
+              <div key={index} className="rounded-none border p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="space-y-2">
+                    <Skeleton className="h-5 w-28 rounded-none" />
+                    <Skeleton className="h-3 w-40 rounded-none" />
+                  </div>
+                  <Skeleton className="h-5 w-14 rounded-none" />
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <Skeleton className="h-5 w-20 rounded-none" />
+                  <Skeleton className="h-5 w-20 rounded-none" />
+                </div>
+                <div className="mt-4 flex items-center justify-between">
+                  <Skeleton className="h-3 w-24 rounded-none" />
+                  <Skeleton className="h-8 w-20 rounded-none" />
+                </div>
+              </div>
+            ))
           ) : data.length === 0 ? (
             <div className="rounded-none border border-dashed p-6 text-sm text-muted-foreground">
               No academic years yet.

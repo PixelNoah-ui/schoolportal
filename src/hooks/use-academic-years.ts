@@ -23,6 +23,7 @@ export function useCreateAcademicYear() {
   return useMutation({
     mutationFn: (payload: Record<string, string>) =>
       createAcademicYear(payload),
+    retry: false,
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: academicYearsKey }),
   });
@@ -39,6 +40,7 @@ export function useUpdateAcademicYear() {
       id: string;
       payload: Record<string, string>;
     }) => updateAcademicYear(id, payload),
+    retry: false,
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: academicYearsKey }),
   });
@@ -49,6 +51,7 @@ export function useActivateAcademicYear() {
 
   return useMutation({
     mutationFn: (id: string) => activateAcademicYear(id),
+    retry: false,
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: academicYearsKey }),
   });
@@ -59,6 +62,7 @@ export function useCompleteAcademicYear() {
 
   return useMutation({
     mutationFn: (id: string) => completeAcademicYear(id),
+    retry: false,
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: academicYearsKey }),
   });
@@ -69,6 +73,7 @@ export function useDeleteAcademicYear() {
 
   return useMutation({
     mutationFn: (id: string) => deleteAcademicYear(id),
+    retry: false,
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: academicYearsKey }),
   });

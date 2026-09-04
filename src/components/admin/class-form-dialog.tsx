@@ -45,7 +45,7 @@ interface ClassFormDialogProps {
 function parseSections(section?: string) {
   return (section ?? "")
     .split(",")
-    .map((item) => item.trim())
+    .map((item) => item.trim().toUpperCase())
     .filter(Boolean);
 }
 
@@ -75,6 +75,7 @@ export function ClassFormDialog({
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>(
     initialValues?.subjects ?? [],
   );
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const sectionOptions = Array.from(
     new Set([...DEFAULT_SECTION_OPTIONS, ...customSections]),
   );
@@ -111,10 +112,10 @@ export function ClassFormDialog({
   // Intercepts every open/close request. Seeds fresh state on the way in,
   // clears it on the way out — no useEffect required.
   function handleOpenChange(next: boolean) {
+    if (!next && (isLoading || isSubmitting)) return;
+
     if (next) {
       seedForm();
-    } else {
-      resetForm();
     }
     setOpen(next);
   }
@@ -155,7 +156,7 @@ export function ClassFormDialog({
   }
 
   async function handleSubmit() {
-    if (isLoading) return;
+    if (isLoading || isSubmitting) return;
     if (!grade) {
       alert("Grade is required");
       return;
@@ -172,8 +173,13 @@ export function ClassFormDialog({
       subjects: selectedSubjects,
     };
 
-    await Promise.resolve(onSubmit(payload));
-    handleOpenChange(false);
+    setIsSubmitting(true);
+    try {
+      await Promise.resolve(onSubmit(payload));
+      handleOpenChange(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -273,15 +279,34 @@ export function ClassFormDialog({
           </div>
 
           {/* Subjects — card-grid multi-select */}
-          {mode === "add" && (
+          {
             <div className="space-y-2 rounded-lg border bg-muted/10 p-3">
               <div className="flex items-center justify-between">
-                <Label>Subjects for this grade</Label>
-                {selectedSubjects.length > 0 && (
+                <Label>Subjects for this class</Label>
+                <div className="flex items-center gap-2">
                   <span className="text-xs font-medium text-primary">
                     {selectedSubjects.length} selected
                   </span>
-                )}
+                  {subjectOptions.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 rounded-none px-2 text-xs"
+                      onClick={() =>
+                        setSelectedSubjects(
+                          selectedSubjects.length === subjectOptions.length
+                            ? []
+                            : subjectOptions.map((subject) => subject.id),
+                        )
+                      }
+                    >
+                      {selectedSubjects.length === subjectOptions.length
+                        ? "Clear all"
+                        : "Select all"}
+                    </Button>
+                  )}
+                </div>
               </div>
               <p className="text-xs text-muted-foreground">
                 Tap all subjects this class will take — you can pick as many as
@@ -324,7 +349,7 @@ export function ClassFormDialog({
                 </div>
               )}
             </div>
-          )}
+          }
         </div>
 
         <DialogFooter>
@@ -332,16 +357,16 @@ export function ClassFormDialog({
             variant="outline"
             className="rounded-none"
             onClick={() => handleOpenChange(false)}
-            disabled={isLoading}
+            disabled={isLoading || isSubmitting}
           >
             Cancel
           </Button>
           <Button
             className="rounded-none"
             onClick={handleSubmit}
-            disabled={isLoading}
+            disabled={isLoading || isSubmitting}
           >
-            {isLoading ? (
+            {isLoading || isSubmitting ? (
               <>
                 <Loader2 className="size-4 animate-spin" />
                 {mode === "add" ? "Creating..." : "Saving..."}

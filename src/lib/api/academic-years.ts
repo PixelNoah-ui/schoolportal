@@ -88,6 +88,19 @@ export async function createAcademicYear(payload: Record<string, string>) {
   const name =
     (payload.name ?? "").trim() || generateAcademicYearName(startDate, endDate);
 
+  const { data: existingYear, error: existingYearError } = await supabase
+    .from("academic_years")
+    .select("id")
+    .eq("name", name)
+    .maybeSingle();
+
+  if (existingYearError) throw new Error(existingYearError.message);
+  if (existingYear) {
+    throw new Error(
+      `Academic year "${name}" already exists. Delete or edit the existing record before creating it again.`,
+    );
+  }
+
   const { data: activeYear, error: activeYearError } = await supabase
     .from("academic_years")
     .select("id")
@@ -110,7 +123,17 @@ export async function createAcademicYear(payload: Record<string, string>) {
     )
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (
+      error.code === "23505" &&
+      error.message.includes("academic_years_name_key")
+    ) {
+      throw new Error(
+        `Academic year "${name}" already exists. Delete or edit the existing record before creating it again.`,
+      );
+    }
+    throw new Error(error.message);
+  }
 
   if (activeYear && activeYear.id !== data.id) {
     const { error: deactivateError } = await supabase
@@ -125,19 +148,25 @@ export async function createAcademicYear(payload: Record<string, string>) {
   const semestersInput = payload.semesters ? JSON.parse(payload.semesters) : [];
 
   if (Array.isArray(semestersInput) && semestersInput.length > 0) {
-    const rows = semestersInput.map((semester: Record<string, string>) => ({
-      academic_year_id: academicYear.id,
-      name: semester.name,
-      start_date: semester.start_date ?? null,
-      end_date: semester.end_date ?? null,
-      status: "grading_open",
-    }));
+    const rows = semestersInput.map(
+      (semester: Record<string, string>, index: number) => ({
+        academic_year_id: academicYear.id,
+        name: semester.name,
+        ordinal: index + 1,
+        start_date: semester.start_date ?? startDate,
+        end_date: semester.end_date ?? endDate,
+        status: "draft",
+      }),
+    );
 
     const { error: semesterError } = await supabase
       .from("semesters")
       .insert(rows);
 
-    if (semesterError) throw new Error(semesterError.message);
+    if (semesterError) {
+      await supabase.from("academic_years").delete().eq("id", academicYear.id);
+      throw new Error(semesterError.message);
+    }
   }
 
   return mapAcademicYear({
@@ -258,13 +287,102 @@ export async function completeAcademicYear(id: string) {
 export async function deleteAcademicYear(id: string) {
   const supabase = createClient();
 
-  const [{ error: semesterError }, { error: classError }] = await Promise.all([
-    supabase.from("semesters").delete().eq("academic_year_id", id),
-    supabase.from("classes").delete().eq("academic_year_id", id),
+  const [
+    { data: semesters, error: semesterQueryError },
+    { data: classes, error: classQueryError },
+  ] = await Promise.all([
+    supabase.from("semesters").select("id").eq("academic_year_id", id),
+    supabase.from("classes").select("id").eq("academic_year_id", id),
   ]);
 
-  if (semesterError) throw new Error(semesterError.message);
-  if (classError) throw new Error(classError.message);
+  if (semesterQueryError) throw new Error(semesterQueryError.message);
+  if (classQueryError) throw new Error(classQueryError.message);
+
+  const semesterIds = (semesters ?? []).map((semester) => semester.id);
+  const classIds = (classes ?? []).map((classRow) => classRow.id);
+
+  if (semesterIds.length) {
+    const { error: semesterGradeError } = await supabase
+      .from("grades")
+      .delete()
+      .in("semester_id", semesterIds);
+    if (semesterGradeError) throw new Error(semesterGradeError.message);
+
+    const { error: semesterAttendanceError } = await supabase
+      .from("attendance_sessions")
+      .delete()
+      .in("semester_id", semesterIds);
+    if (semesterAttendanceError) {
+      throw new Error(semesterAttendanceError.message);
+    }
+
+    const { error: semesterEnrollmentError } = await supabase
+      .from("student_enrollments")
+      .delete()
+      .in("semester_id", semesterIds);
+    if (semesterEnrollmentError) {
+      throw new Error(semesterEnrollmentError.message);
+    }
+  }
+
+  if (classIds.length) {
+    const { data: classSubjects, error: classSubjectQueryError } =
+      await supabase
+        .from("class_subjects")
+        .select("id")
+        .in("class_id", classIds);
+    if (classSubjectQueryError) throw new Error(classSubjectQueryError.message);
+
+    const classSubjectIds = (classSubjects ?? []).map(
+      (classSubject) => classSubject.id,
+    );
+
+    if (classSubjectIds.length) {
+      const { error: assessmentError } = await supabase
+        .from("course_assessments")
+        .delete()
+        .in("class_subject_id", classSubjectIds);
+      if (assessmentError) throw new Error(assessmentError.message);
+
+      const { error: gradeError } = await supabase
+        .from("grades")
+        .delete()
+        .in("class_subject_id", classSubjectIds);
+      if (gradeError) throw new Error(gradeError.message);
+
+      const { error: classSubjectError } = await supabase
+        .from("class_subjects")
+        .delete()
+        .in("id", classSubjectIds);
+      if (classSubjectError) throw new Error(classSubjectError.message);
+    }
+
+    const { error: attendanceError } = await supabase
+      .from("attendance_sessions")
+      .delete()
+      .in("class_id", classIds);
+    if (attendanceError) throw new Error(attendanceError.message);
+
+    const { error: enrollmentError } = await supabase
+      .from("student_enrollments")
+      .delete()
+      .in("class_id", classIds);
+    if (enrollmentError) throw new Error(enrollmentError.message);
+
+    const { error: classError } = await supabase
+      .from("classes")
+      .delete()
+      .in("id", classIds);
+    if (classError) throw new Error(classError.message);
+  }
+
+  if (semesterIds.length) {
+    const { error: semesterError } = await supabase
+      .from("semesters")
+      .delete()
+      .in("id", semesterIds);
+    if (semesterError) throw new Error(semesterError.message);
+  }
 
   const { error } = await supabase.from("academic_years").delete().eq("id", id);
   if (error) throw new Error(error.message);

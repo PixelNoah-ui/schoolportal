@@ -30,6 +30,14 @@ function getFriendlyAuthMessage(message: string) {
     return "Please confirm your email before signing in.";
   }
 
+  if (normalized.includes("could not load your account profile")) {
+    return "We could not load your account profile. Please try again or contact an administrator.";
+  }
+
+  if (normalized.includes("no valid role")) {
+    return "Your account is missing a valid portal role. Please contact an administrator.";
+  }
+
   if (
     normalized.includes("too many requests") ||
     normalized.includes("rate limit")

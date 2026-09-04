@@ -128,9 +128,57 @@ export async function POST(request: Request) {
   }));
 
   if (classSubjectAssignments.length > 0) {
+    const classIds = [
+      ...new Set(
+        classSubjectAssignments.map((assignment) => assignment.class_id),
+      ),
+    ];
+    const { data: classRows, error: classError } = await admin
+      .from("classes")
+      .select("id, academic_year_id")
+      .in("id", classIds);
+    const academicYearIds = [
+      ...new Set(
+        (classRows ?? []).map((classRow) => classRow.academic_year_id),
+      ),
+    ];
+    const { data: semesterRows, error: semesterError } = await admin
+      .from("semesters")
+      .select("id, academic_year_id")
+      .in("academic_year_id", academicYearIds)
+      .order("ordinal", { ascending: true });
+
+    if (classError || semesterError) {
+      console.error(
+        "Warning: Failed to resolve assignment semesters:",
+        classError ?? semesterError,
+      );
+    }
+
+    const semesterByYear = new Map<string, string>();
+    for (const semester of semesterRows ?? []) {
+      if (!semesterByYear.has(semester.academic_year_id)) {
+        semesterByYear.set(semester.academic_year_id, semester.id);
+      }
+    }
+    const academicYearByClass = new Map(
+      (classRows ?? []).map((classRow) => [
+        classRow.id,
+        classRow.academic_year_id,
+      ]),
+    );
+    const assignmentsWithSemester = classSubjectAssignments.map(
+      (assignment) => ({
+        ...assignment,
+        semester_id: semesterByYear.get(
+          academicYearByClass.get(assignment.class_id) ?? "",
+        ),
+      }),
+    );
+
     const { error: assignmentError } = await admin
       .from("class_subjects")
-      .insert(classSubjectAssignments);
+      .insert(assignmentsWithSemester);
 
     if (assignmentError) {
       console.error("Warning: Failed to create assignments:", assignmentError);

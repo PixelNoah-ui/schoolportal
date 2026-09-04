@@ -12,7 +12,8 @@ import { TableSkeleton } from "@/components/admin/table-skeleton";
 import { EntityEmptyState } from "@/components/admin/entity-empty-state";
 import { ConfirmDeleteDialog } from "@/components/admin/confirm-delete-dialog";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { useToastManager } from "@/components/ui/toast";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,7 +45,8 @@ import {
 import { useAcademicYears } from "@/hooks/use-academic-years";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useSubjects } from "@/hooks/use-subjects";
-import { addClassSubject } from "@/lib/api/class-subjects";
+import { useClassSubjects } from "@/hooks/use-class-subjects";
+import { addClassSubject, removeClassSubject } from "@/lib/api/class-subjects";
 
 function initials(name: string) {
   return name
@@ -71,17 +73,20 @@ export default function ClassesPage() {
   const { data: subjectOptions = { subjects: [] } } = useSubjects({
     pageSize: 200,
   });
-  const { data, isLoading } = useClasses({
+  const { data, error, isLoading } = useClasses({
     search: debouncedSearch,
     academicYearId: yearFilter,
     page: currentPage,
   });
+  const { data: editClassDetails } = useClassSubjects(editClassId ?? "");
   const createClass = useCreateClass();
   const updateClass = useUpdateClass();
   const deleteClass = useDeleteClass();
+  const toastManager = useToastManager();
+  const queryClient = useQueryClient();
 
   const hasFilters = Boolean(search) || yearFilter !== "all";
-  const isEmpty = !isLoading && (data?.classes.length ?? 0) === 0;
+  const isEmpty = !isLoading && !error && (data?.classes.length ?? 0) === 0;
 
   const updateQuery = useCallback(
     (key: string, value: string) => {
@@ -114,6 +119,24 @@ export default function ClassesPage() {
   const deleteClassRow = data?.classes.find(
     (classRow) => classRow.id === deleteClassId,
   );
+  const editSubjects =
+    editClassDetails?.classSubjects.map((subject) => ({
+      classSubjectId: subject.id,
+      id: subject.subjectId,
+      name: subject.subjectName,
+    })) ??
+    editClass?.subjects ??
+    [];
+  const editSubjectOptions = Array.from(
+    new Map(
+      [...subjectOptions.subjects, ...editSubjects].map((subject) => [
+        subject.id,
+        { id: subject.id, name: subject.name },
+      ]),
+    ).values(),
+  );
+  const editGrade = editClassDetails?.grade ?? editClass?.grade ?? 0;
+  const editSection = editClassDetails?.section ?? editClass?.section ?? "";
 
   return (
     <>
@@ -127,34 +150,51 @@ export default function ClassesPage() {
             onOpenChange={setAddOpen}
             subjectOptions={subjectOptions.subjects}
             onSubmit={async (values) => {
-              const sections = values.section
-                .split(",")
-                .map((section) => section.trim())
-                .filter(Boolean);
-              const sectionsToCreate = sections.length ? sections : [""];
+              try {
+                const sections = values.section
+                  .split(",")
+                  .map((section) => section.trim())
+                  .filter(Boolean);
+                const sectionsToCreate = sections.length ? sections : [""];
 
-              await Promise.all(
-                sectionsToCreate.map(async (section) => {
-                  const createdClass = await createClass.mutateAsync({
-                    grade: values.grade,
-                    section,
-                    academic_year_id: activeAcademicYearId || "",
-                  });
+                await Promise.all(
+                  sectionsToCreate.map(async (section) => {
+                    const createdClass = await createClass.mutateAsync({
+                      grade: values.grade,
+                      section,
+                      academic_year_id: activeAcademicYearId || "",
+                    });
 
-                  if (values.subjects.length) {
-                    await Promise.all(
-                      values.subjects.map((subjectId) =>
-                        addClassSubject({
-                          classId: createdClass.id,
-                          subjectId,
-                        }),
-                      ),
-                    );
-                  }
+                    if (values.subjects.length) {
+                      await Promise.all(
+                        values.subjects.map((subjectId) =>
+                          addClassSubject({
+                            classId: createdClass.id,
+                            subjectId,
+                          }),
+                        ),
+                      );
+                    }
 
-                  return createdClass;
-                }),
-              );
+                    return createdClass;
+                  }),
+                );
+                toastManager.add({
+                  title: "Class created",
+                  description: "The class and selected subjects were added.",
+                  type: "success",
+                });
+              } catch (error) {
+                toastManager.add({
+                  title: "Could not create class",
+                  description:
+                    error instanceof Error
+                      ? error.message
+                      : "Please try again.",
+                  type: "error",
+                });
+                throw error;
+              }
             }}
             isLoading={createClass.isPending}
             trigger={
@@ -191,12 +231,17 @@ export default function ClassesPage() {
         </div>
 
         <div className="overflow-hidden rounded-none border">
+          {error ? (
+            <div className="border-b border-destructive/20 bg-destructive/5 px-4 py-5 text-sm text-destructive">
+              Could not load classes:{" "}
+              {error instanceof Error ? error.message : "Please try again."}
+            </div>
+          ) : null}
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead>Class</TableHead>
-                <TableHead>Grade</TableHead>
-                <TableHead>Section</TableHead>
+                <TableHead>Subjects</TableHead>
                 <TableHead>Homeroom teacher</TableHead>
                 <TableHead>Students</TableHead>
                 <TableHead className="w-28 text-right">Actions</TableHead>
@@ -220,24 +265,24 @@ export default function ClassesPage() {
                         </span>
                       </div>
                     </TableCell>
+
                     <TableCell>
-                      <Badge
-                        variant="outline"
-                        className="rounded-full border-border bg-background font-medium text-foreground"
-                      >
-                        Grade {classRow.grade}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {classRow.section ? (
-                        <span className="flex size-7 items-center justify-center rounded-full border border-border bg-background text-xs font-semibold text-foreground">
-                          {classRow.section}
-                        </span>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">
-                          Unassigned
-                        </span>
-                      )}
+                      <div className="flex max-w-xs flex-wrap gap-1.5">
+                        {classRow.subjects.length > 0 ? (
+                          classRow.subjects.map((subject) => (
+                            <span
+                              key={subject.classSubjectId}
+                              className="inline-flex items-center border border-primary/20 bg-primary/5 px-2 py-1 text-xs font-medium text-primary"
+                            >
+                              {subject.name}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            No subjects
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-sm">
                       {classRow.teacher && classRow.teacher !== "Unassigned" ? (
@@ -313,24 +358,72 @@ export default function ClassesPage() {
 
         {editClass && (
           <ClassFormDialog
+            key={`${editClass.id}:${editGrade}:${editSection}:${editSubjects.map((subject) => subject.id).join(",")}`}
             mode="edit"
             open
             onOpenChange={(open) => !open && setEditClassId(null)}
+            subjectOptions={editSubjectOptions}
             initialValues={{
-              grade: String(editClass.grade),
-              section: editClass.section || "",
+              grade: String(editGrade),
+              section: editSection,
               homeroom_teacher: "",
+              subjects: editSubjects.map((subject) => subject.id),
             }}
-            onSubmit={(values) =>
-              updateClass.mutateAsync({
-                id: editClass.id,
-                payload: {
-                  grade: values.grade,
-                  section: values.section,
-                  academic_year_id: activeAcademicYearId || "",
-                },
-              })
-            }
+            onSubmit={async (values) => {
+              try {
+                await updateClass.mutateAsync({
+                  id: editClass.id,
+                  payload: {
+                    grade: values.grade,
+                    section: values.section,
+                    academic_year_id: activeAcademicYearId || "",
+                  },
+                });
+                const previousSubjects = new Map(
+                  editSubjects.map((subject) => [subject.id, subject]),
+                );
+                await Promise.all(
+                  values.subjects
+                    .filter((subjectId) => !previousSubjects.has(subjectId))
+                    .map((subjectId) =>
+                      addClassSubject({
+                        classId: editClass.id,
+                        subjectId,
+                      }),
+                    ),
+                );
+                await Promise.all(
+                  editSubjects
+                    .filter((subject) => !values.subjects.includes(subject.id))
+                    .map((subject) =>
+                      removeClassSubject({
+                        classSubjectId: subject.classSubjectId,
+                      }),
+                    ),
+                );
+                await queryClient.invalidateQueries({
+                  queryKey: ["class-subjects", editClass.id],
+                });
+                await queryClient.invalidateQueries({
+                  queryKey: ["classes"],
+                });
+                toastManager.add({
+                  title: "Class updated",
+                  description: "The class details were updated.",
+                  type: "success",
+                });
+              } catch (error) {
+                toastManager.add({
+                  title: "Could not update class",
+                  description:
+                    error instanceof Error
+                      ? error.message
+                      : "Please try again.",
+                  type: "error",
+                });
+                throw error;
+              }
+            }}
             isLoading={updateClass.isPending}
           />
         )}
@@ -341,8 +434,25 @@ export default function ClassesPage() {
             open
             onOpenChange={(open) => !open && setDeleteClassId(null)}
             onConfirm={async () => {
-              await deleteClass.mutateAsync(deleteClassRow.id);
-              setDeleteClassId(null);
+              try {
+                await deleteClass.mutateAsync(deleteClassRow.id);
+                toastManager.add({
+                  title: "Class deleted",
+                  description: "The class was removed successfully.",
+                  type: "success",
+                });
+                setDeleteClassId(null);
+              } catch (error) {
+                toastManager.add({
+                  title: "Could not delete class",
+                  description:
+                    error instanceof Error
+                      ? error.message
+                      : "Please try again.",
+                  type: "error",
+                });
+                throw error;
+              }
             }}
             isLoading={deleteClass.isPending}
           />

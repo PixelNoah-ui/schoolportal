@@ -19,8 +19,8 @@ type TeacherRecord = { id: string; profile_id: string; profiles: ProfileRow[] };
 type ClassRecord = {
   id: string;
   name: string;
-  grade: number;
   section: string | null;
+  grade_levels: { level_number: number }[];
 };
 
 type SubjectRecord = { id: string; name: string };
@@ -42,11 +42,11 @@ type PaymentRecord = {
   id: string;
   student_id: string;
   amount: number;
-  payment_month: string;
   status: PaymentRow["status"];
   payment_method: PaymentRow["paymentMethod"];
   submitted_at: string | null;
   note: string | null;
+  payment_month_allocations: { payment_month: string }[];
   students: { profiles: Pick<ProfileRow, "full_name">[] }[];
 };
 
@@ -107,8 +107,10 @@ export async function fetchDashboard(): Promise<DashboardData> {
     query<ClassRecord[]>(
       supabase
         .from("classes")
-        .select("id, name, grade, section")
-        .order("grade"),
+        .select(
+          "id, name, section, grade_levels!classes_grade_level_id_fkey(level_number)",
+        )
+        .order("level_number", { foreignTable: "grade_levels" }),
     ),
     query<SubjectRecord[]>(
       supabase.from("subjects").select("id, name").order("name"),
@@ -122,7 +124,7 @@ export async function fetchDashboard(): Promise<DashboardData> {
       supabase
         .from("assessment_results")
         .select("score, student_id, course_assessments!inner(class_subject_id)")
-        .eq("status", "graded"),
+        .in("status", ["approved", "locked"]),
     ),
     query<AcademicYearRecord[]>(
       supabase
@@ -137,7 +139,7 @@ export async function fetchDashboard(): Promise<DashboardData> {
       supabase
         .from("payments")
         .select(
-          "id, student_id, amount, payment_month, status, payment_method, submitted_at, note, students!payments_student_id_fkey(profiles!students_profile_id_fkey(full_name))",
+          "id, student_id, amount, status, payment_method, submitted_at, note, payment_month_allocations(payment_month), students!payments_student_id_fkey(profiles!students_profile_id_fkey(full_name))",
         )
         .order("created_at", { ascending: false }),
     ),
@@ -173,7 +175,9 @@ export async function fetchDashboard(): Promise<DashboardData> {
   // this stays "Unassigned" until that relation is added to the query.
   const mappedClasses: ClassRow[] = classes.map((classRow) => ({
     ...classRow,
+    grade: classRow.grade_levels?.[0]?.level_number ?? 0,
     section: classRow.section ?? "",
+    subjects: [],
     studentCount: students.filter((student) => student.classId === classRow.id)
       .length,
     teacher: "Unassigned",
@@ -193,11 +197,12 @@ export async function fetchDashboard(): Promise<DashboardData> {
       ? (profilesById.get(teacherProfileId)?.full_name ?? "Assigned teacher")
       : "Unassigned";
     const scores = scoresBySubject.get(subject.id) ?? [];
+    const classGrade = classRow?.grade_levels?.[0]?.level_number;
     return {
       id: subject.id,
       name: subject.name,
       className: classRow
-        ? `Grade ${classRow.grade} - ${classRow.section ?? ""}`
+        ? `Grade ${classGrade ?? 0} - ${classRow.section ?? ""}`
         : "All classes",
       classId: classRow?.id ?? "",
       teacher,
@@ -226,6 +231,7 @@ export async function fetchDashboard(): Promise<DashboardData> {
     const studentRecord = students.find((row) => row.id === payment.student_id);
     const className = studentRecord?.className ?? "Unassigned";
     const studentProfile = payment.students?.[0]?.profiles?.[0];
+    const paymentMonth = payment.payment_month_allocations?.[0]?.payment_month;
 
     return {
       id: payment.id,
@@ -235,7 +241,7 @@ export async function fetchDashboard(): Promise<DashboardData> {
       classId: studentRecord?.classId ?? "",
       className,
       amount: Number(payment.amount),
-      paymentMonth: payment.payment_month,
+      paymentMonth: paymentMonth ?? "",
       status: payment.status,
       paymentMethod: payment.payment_method ?? "other",
       submittedAt: payment.submitted_at ?? "",

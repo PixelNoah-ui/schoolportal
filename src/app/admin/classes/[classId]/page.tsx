@@ -1,18 +1,18 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import {
-  AlertTriangle,
   ArrowLeft,
   BookOpen,
-  MoreVertical,
+  Check,
+  GraduationCap,
   Pencil,
-  Plus,
-  Trash2,
   Users,
 } from "lucide-react";
 import { SiteHeader } from "@/components/admin/site-header";
+import { ClassFormDialog } from "@/components/admin/class-form-dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,100 +24,117 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  useAddClassSubject,
-  useAvailableSubjects,
   useAvailableTeachers,
   useClassSubjects,
   useRemoveClassSubject,
-  useUpdateClassSubjectTeacher,
 } from "@/hooks/use-class-subjects";
+import { addClassSubject } from "@/lib/api/class-subjects";
 import { useUpdateClass } from "@/hooks/use-classes";
+import { useSubjects } from "@/hooks/use-subjects";
+import { useToastManager } from "@/components/ui/toast";
 import { useParams } from "next/navigation";
 
 export default function ClassDetailPage() {
   const params = useParams<{ classId: string }>();
   const classId = params.classId;
-  const [selectedSubject, setSelectedSubject] = useState<string>("");
-  const [selectedTeacher, setSelectedTeacher] = useState<string>("");
-  const [removeError, setRemoveError] = useState<string | null>(null);
-  const [editingSubjectId, setEditingSubjectId] = useState<string | null>(null);
   const [homeroomTeacher, setHomeroomTeacher] = useState("");
+  const [editOpen, setEditOpen] = useState(false);
 
   const { data, isLoading } = useClassSubjects(classId);
-  const { data: subjectOptions } = useAvailableSubjects(classId);
   const { data: teacherOptions } = useAvailableTeachers();
-  const addClassSubject = useAddClassSubject(classId);
-  const updateClassSubjectTeacher = useUpdateClassSubjectTeacher(classId);
+  const { data: subjectOptions = { subjects: [] } } = useSubjects({
+    pageSize: 200,
+  });
   const removeClassSubject = useRemoveClassSubject(classId);
   const updateClass = useUpdateClass();
+  const toastManager = useToastManager();
+  const queryClient = useQueryClient();
 
   const assignedSubjects = useMemo(
     () => data?.classSubjects ?? [],
     [data?.classSubjects],
   );
-  const availableSubjects = subjectOptions?.subjects ?? [];
-
+  const editSubjectOptions = useMemo(
+    () =>
+      assignedSubjects.map((subject) => ({
+        id: subject.subjectId,
+        name: subject.subjectName,
+      })),
+    [assignedSubjects],
+  );
   const selectedHomeroomTeacher =
     homeroomTeacher || data?.homeroomTeacherId || "";
-
-  const handleAddAssignment = () => {
-    if (!selectedSubject) return;
-    addClassSubject.mutate({
-      subjectId: selectedSubject,
-      teacherId: selectedTeacher || null,
-    });
-    setSelectedSubject("");
-    setSelectedTeacher("");
-  };
-
-  const handleSelectSubject = (value: string | null) => {
-    setSelectedSubject(value ?? "");
-  };
-
-  const handleSelectTeacher = (value: string | null) => {
-    setSelectedTeacher(value ?? "");
-  };
-
-  const handleTeacherChange = (
-    classSubjectId: string,
-    teacherId: string | null,
-  ) => {
-    updateClassSubjectTeacher.mutate({ classSubjectId, teacherId });
-  };
 
   const handleHomeroomChange = async (value: string | null) => {
     const nextTeacher = value ?? "";
     setHomeroomTeacher(nextTeacher);
+    try {
+      await updateClass.mutateAsync({
+        id: classId,
+        payload: {
+          grade: String(data?.grade ?? ""),
+          section: data?.section ?? "",
+          homeroom_teacher: nextTeacher,
+        },
+      });
+      toastManager.add({
+        title: "Homeroom teacher assigned",
+        description: nextTeacher
+          ? "The class homeroom teacher has been updated."
+          : "The homeroom teacher assignment was cleared.",
+        type: "success",
+      });
+    } catch (error) {
+      toastManager.add({
+        title: "Could not assign homeroom teacher",
+        description:
+          error instanceof Error ? error.message : "Please try again.",
+        type: "error",
+      });
+    }
+  };
+
+  const handleClassEdit = async (values: {
+    grade: string;
+    section: string;
+    subjects: string[];
+  }) => {
+    if (!data) return;
+
     await updateClass.mutateAsync({
       id: classId,
       payload: {
-        grade: String(data?.grade ?? ""),
-        section: data?.section ?? "",
-        homeroom_teacher: nextTeacher,
+        grade: values.grade,
+        section: values.section,
+        homeroom_teacher: data.homeroomTeacherId ?? "",
       },
     });
-  };
 
-  const handleRemove = (classSubjectId: string) => {
-    setRemoveError(null);
-    removeClassSubject.mutate(
-      { classSubjectId },
-      {
-        onError: (error) => {
-          setRemoveError(
-            error instanceof Error && error.message
-              ? error.message
-              : "We couldn’t remove this class assignment. Please try again.",
-          );
-        },
-      },
+    const assignedIds = new Set(
+      data.classSubjects.map((subject) => subject.subjectId),
     );
+    await Promise.all(
+      values.subjects
+        .filter((subjectId) => !assignedIds.has(subjectId))
+        .map((subjectId) => addClassSubject({ classId, subjectId })),
+    );
+    await Promise.all(
+      data.classSubjects
+        .filter((subject) => !values.subjects.includes(subject.subjectId))
+        .map((subject) =>
+          removeClassSubject.mutateAsync({ classSubjectId: subject.id }),
+        ),
+    );
+    await queryClient.invalidateQueries({
+      queryKey: ["class-subjects", classId],
+    });
+    await queryClient.invalidateQueries({ queryKey: ["classes"] });
+
+    toastManager.add({
+      title: "Class updated",
+      description: "The class details and subjects were updated.",
+      type: "success",
+    });
   };
 
   if (!classId || isLoading) {
@@ -131,12 +148,9 @@ export default function ClassDetailPage() {
             <Skeleton className="h-4 w-32 rounded-none" />
           </div>
 
-          <div className="rounded-none border bg-card p-4">
-            <div className="flex flex-col gap-4 md:flex-row md:items-end">
-              <Skeleton className="h-14 flex-1 rounded-none" />
-              <Skeleton className="h-14 flex-1 rounded-none" />
-              <Skeleton className="h-9 w-32 rounded-none" />
-            </div>
+          <div className="grid gap-4 md:grid-cols-[1.3fr_0.7fr]">
+            <Skeleton className="h-32 rounded-none" />
+            <Skeleton className="h-32 rounded-none" />
           </div>
 
           <div className="rounded-none border">
@@ -155,92 +169,145 @@ export default function ClassDetailPage() {
   return (
     <>
       <SiteHeader title={data?.className ?? "Class details"} />
-      <div className="flex flex-1 flex-col gap-5 p-6">
-        <div className="flex items-center justify-between gap-3">
-          <div>
+      <div className="flex flex-1 flex-col gap-6 bg-muted/20 p-4 sm:p-6">
+        <div className="flex flex-col gap-5 border-b pb-5 sm:flex-row sm:items-end sm:justify-between">
+          <div className="space-y-3">
             <Link
               href="/admin/classes"
-              className="mb-2 inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
+              className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="size-3.5" />
               Back to classes
             </Link>
-            <h2 className="text-xl font-semibold tracking-tight">
-              {data?.className ?? "Class assignments"}
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              {data?.grade ? `Grade ${data.grade}` : "Grade not set"}
-              {data?.section ? ` · Section ${data.section}` : ""}
-            </p>
+            <div className="flex items-center gap-3">
+              <div className="flex size-12 items-center justify-center bg-primary text-primary-foreground">
+                <GraduationCap className="size-6" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-semibold tracking-tight">
+                  {data?.className ?? "Class assignments"}
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  {data?.grade ? `Grade ${data.grade}` : "Grade not set"}
+                  {data?.section ? ` · Section ${data.section}` : ""}
+                </p>
+              </div>
+            </div>
           </div>
-          <div className="w-full max-w-xs space-y-2 sm:w-64">
-            <Label htmlFor="homeroom-teacher">Homeroom teacher</Label>
-            <Select
-              value={selectedHomeroomTeacher}
-              onValueChange={handleHomeroomChange}
-              disabled={updateClass.isPending}
+          <div className="flex items-center gap-2">
+            <ClassFormDialog
+              key={`${classId}:${data?.grade}:${data?.section}:${data?.classSubjects.map((subject) => subject.subjectId).join(",")}`}
+              mode="edit"
+              open={editOpen}
+              onOpenChange={setEditOpen}
+              subjectOptions={Array.from(
+                new Map(
+                  [...subjectOptions.subjects, ...editSubjectOptions].map(
+                    (subject) => [subject.id, subject],
+                  ),
+                ).values(),
+              )}
+              initialValues={{
+                grade: String(data?.grade ?? ""),
+                section: data?.section ?? "",
+                subjects:
+                  data?.classSubjects.map((subject) => subject.subjectId) ?? [],
+              }}
+              onSubmit={handleClassEdit}
+              isLoading={updateClass.isPending || removeClassSubject.isPending}
+            />
+            <Button
+              variant="outline"
+              className="rounded-none"
+              onClick={() => setEditOpen(true)}
             >
-              <SelectTrigger
-                id="homeroom-teacher"
-                className="w-full rounded-none"
-              >
-                <SelectValue placeholder="Unassigned" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">Unassigned</SelectItem>
-                {(teacherOptions?.teachers ?? []).map((teacher) => (
-                  <SelectItem key={teacher.id} value={teacher.id}>
-                    {teacher.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              <Pencil className="size-4" /> Edit class
+            </Button>
           </div>
         </div>
 
-        {removeError && (
-          <div
-            role="alert"
-            className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
-          >
-            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-            <p className="leading-5">{removeError}</p>
-          </div>
-        )}
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <section className="border bg-card">
+            <div className="flex items-center justify-between border-b px-5 py-4">
+              <div>
+                <h3 className="font-semibold">Subjects in this class</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Subjects currently assigned to this class.
+                </p>
+              </div>
+              <span className="border bg-muted px-2 py-1 text-xs font-semibold tabular-nums">
+                {assignedSubjects.length}
+              </span>
+            </div>
+            {assignedSubjects.length === 0 ? (
+              <div className="flex flex-col items-center px-6 py-16 text-center">
+                <BookOpen className="size-9 text-muted-foreground" />
+                <p className="mt-3 font-semibold">No subjects assigned</p>
+                <p className="mt-1 max-w-xs text-sm text-muted-foreground">
+                  Add subjects from the class edit dialog to build this class
+                  roster.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {assignedSubjects.map((item, index) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-3 px-5 py-4"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="flex size-9 shrink-0 items-center justify-center bg-primary/10 text-sm font-semibold text-primary">
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold">
+                          {item.subjectName}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Subject assignment
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
 
-        {availableSubjects.length > 0 ? (
-          <div className="rounded-none border bg-card p-4">
-            <div className="flex flex-col gap-4 md:flex-row md:items-end">
-              <div className="flex-1 space-y-2">
-                <Label htmlFor="subject-select">Add subject</Label>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {availableSubjects.map((subject) => (
-                    <label
-                      key={subject.id}
-                      className="flex cursor-pointer items-center gap-2 border px-3 py-2 text-sm hover:border-primary"
-                    >
-                      <input
-                        id={`subject-${subject.id}`}
-                        type="radio"
-                        name="subject"
-                        value={subject.id}
-                        checked={selectedSubject === subject.id}
-                        onChange={() => handleSelectSubject(subject.id)}
-                        className="size-4 accent-primary"
-                      />
-                      {subject.name}
-                    </label>
-                  ))}
+          <aside className="border bg-card">
+            <div className="border-b px-5 py-4">
+              <h3 className="font-semibold">Homeroom teacher</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Assign the teacher responsible for this class.
+              </p>
+            </div>
+            <div className="space-y-4 p-5">
+              <div className="flex items-center gap-3 border bg-muted/30 p-3">
+                <div className="flex size-10 items-center justify-center bg-primary text-primary-foreground">
+                  {selectedHomeroomTeacher ? (
+                    <Check className="size-5" />
+                  ) : (
+                    <Users className="size-5" />
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Current status
+                  </p>
+                  <p className="font-semibold">
+                    {data?.homeroomTeacherName ?? "Not assigned"}
+                  </p>
                 </div>
               </div>
-              <div className="flex-1 space-y-2">
-                <Label htmlFor="teacher-select">Assigned teacher</Label>
+              <div className="space-y-2">
+                <Label htmlFor="homeroom-teacher">Choose teacher</Label>
                 <Select
-                  value={selectedTeacher}
-                  onValueChange={handleSelectTeacher}
+                  value={selectedHomeroomTeacher}
+                  onValueChange={handleHomeroomChange}
+                  disabled={updateClass.isPending}
                 >
                   <SelectTrigger
-                    id="teacher-select"
+                    id="homeroom-teacher"
                     className="w-full rounded-none"
                   >
                     <SelectValue placeholder="Unassigned" />
@@ -255,121 +322,11 @@ export default function ClassDetailPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button
-                className="rounded-none"
-                onClick={handleAddAssignment}
-                disabled={!selectedSubject || addClassSubject.isPending}
-              >
-                <Plus className="size-4" /> Add subject
-              </Button>
+              <p className="text-xs leading-5 text-muted-foreground">
+                This teacher appears as the primary contact for the class.
+              </p>
             </div>
-          </div>
-        ) : assignedSubjects.length === 0 ? (
-          <div className="flex items-center gap-3 border border-dashed bg-muted/30 px-4 py-4 text-sm text-muted-foreground">
-            <BookOpen className="size-4 shrink-0" />
-            <span>
-              No courses are available to assign yet. Add subjects first.
-            </span>
-          </div>
-        ) : null}
-
-        {assignedSubjects.length === 0 ? (
-          <div className="flex flex-col items-center justify-center border border-dashed px-6 py-16 text-center">
-            <BookOpen className="size-9 text-muted-foreground" />
-            <p className="mt-3 font-semibold">No courses assigned</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Choose an available subject above to build this class schedule.
-            </p>
-          </div>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {assignedSubjects.map((item) => (
-              <div key={item.id} className="border bg-card p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex size-10 items-center justify-center bg-primary/10 text-primary">
-                      <BookOpen className="size-5" />
-                    </div>
-                    <div>
-                      <p className="font-semibold">{item.subjectName}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Course assigned to this class
-                      </p>
-                    </div>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 rounded-none"
-                          aria-label={`Actions for ${item.subjectName}`}
-                        />
-                      }
-                    >
-                      <MoreVertical className="size-4" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="end"
-                      className="min-w-36 rounded-none"
-                    >
-                      <DropdownMenuItem
-                        onClick={() => setEditingSubjectId(item.id)}
-                      >
-                        <Pencil className="size-4" /> Edit teacher
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onClick={() => handleRemove(item.id)}
-                      >
-                        <Trash2 className="size-4" /> Remove course
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-                <div className="mt-5 border-t pt-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                    Subject teacher
-                  </p>
-                  {editingSubjectId === item.id ? (
-                    <Select
-                      value={item.teacherId ?? ""}
-                      onValueChange={(value) => {
-                        handleTeacherChange(
-                          item.id,
-                          value === "" ? null : value,
-                        );
-                        setEditingSubjectId(null);
-                      }}
-                    >
-                      <SelectTrigger className="mt-2 w-full rounded-none">
-                        <SelectValue placeholder="Unassigned" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">Unassigned</SelectItem>
-                        {(teacherOptions?.teachers ?? []).map((teacher) => (
-                          <SelectItem key={teacher.id} value={teacher.id}>
-                            {teacher.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <p className="mt-1 text-sm">
-                      {item.teacherName ?? "Unassigned"}
-                    </p>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="flex items-center gap-3 border p-4 text-sm text-muted-foreground">
-          <Users className="size-4" />
-          {assignedSubjects.length} subject assignment
-          {assignedSubjects.length === 1 ? "" : "s"}
+          </aside>
         </div>
       </div>
     </>
