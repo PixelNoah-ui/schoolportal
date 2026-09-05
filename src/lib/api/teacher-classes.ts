@@ -95,7 +95,7 @@ function mapTeacherClassDetail(
 export async function fetchTeacherClasses({
   search = "",
   page = 1,
-  pageSize = 10,
+  pageSize = 6,
 }: TeacherClassesListParams = {}): Promise<TeacherClassesListResult> {
   const supabase = createClient();
 

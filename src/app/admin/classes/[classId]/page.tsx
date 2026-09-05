@@ -8,14 +8,21 @@ import {
   BookOpen,
   Check,
   GraduationCap,
+  MoreVertical,
   Pencil,
   Users,
 } from "lucide-react";
 import { SiteHeader } from "@/components/admin/site-header";
 import { ClassFormDialog } from "@/components/admin/class-form-dialog";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -32,6 +39,7 @@ import { addClassSubject } from "@/lib/api/class-subjects";
 import { useUpdateClass } from "@/hooks/use-classes";
 import { useSubjects } from "@/hooks/use-subjects";
 import { useToastManager } from "@/components/ui/toast";
+import { useAcademicYears } from "@/hooks/use-academic-years";
 import { useParams } from "next/navigation";
 
 export default function ClassDetailPage() {
@@ -42,6 +50,8 @@ export default function ClassDetailPage() {
 
   const { data, isLoading } = useClassSubjects(classId);
   const { data: teacherOptions } = useAvailableTeachers();
+  const academicYears: { id: string; isCurrent?: boolean }[] =
+    useAcademicYears().data ?? [];
   const { data: subjectOptions = { subjects: [] } } = useSubjects({
     pageSize: 200,
   });
@@ -64,6 +74,12 @@ export default function ClassDetailPage() {
   );
   const selectedHomeroomTeacher =
     homeroomTeacher || data?.homeroomTeacherId || "";
+  const selectedHomeroomTeacherName =
+    teacherOptions?.teachers.find(
+      (teacher) => teacher.id === selectedHomeroomTeacher,
+    )?.name ??
+    data?.homeroomTeacherName ??
+    "Unassigned";
 
   const handleHomeroomChange = async (value: string | null) => {
     const nextTeacher = value ?? "";
@@ -74,6 +90,10 @@ export default function ClassDetailPage() {
         payload: {
           grade: String(data?.grade ?? ""),
           section: data?.section ?? "",
+          academic_year_id:
+            data?.academicYearId ??
+            academicYears.find((year) => year.isCurrent)?.id ??
+            "",
           homeroom_teacher: nextTeacher,
         },
       });
@@ -106,6 +126,10 @@ export default function ClassDetailPage() {
       payload: {
         grade: values.grade,
         section: values.section,
+        academic_year_id:
+          data.academicYearId ??
+          academicYears.find((year) => year.isCurrent)?.id ??
+          "",
         homeroom_teacher: data.homeroomTeacherId ?? "",
       },
     });
@@ -216,13 +240,25 @@ export default function ClassDetailPage() {
               onSubmit={handleClassEdit}
               isLoading={updateClass.isPending || removeClassSubject.isPending}
             />
-            <Button
-              variant="outline"
-              className="rounded-none"
-              onClick={() => setEditOpen(true)}
-            >
-              <Pencil className="size-4" /> Edit class
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="rounded-none"
+                  >
+                    <MoreVertical className="size-4" />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end" className="rounded-none">
+                <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                  <Pencil className="size-4" />
+                  Edit class
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -295,7 +331,9 @@ export default function ClassDetailPage() {
                     Current status
                   </p>
                   <p className="font-semibold">
-                    {data?.homeroomTeacherName ?? "Not assigned"}
+                    {selectedHomeroomTeacherName === "Unassigned"
+                      ? "Not assigned"
+                      : selectedHomeroomTeacherName}
                   </p>
                 </div>
               </div>
@@ -310,7 +348,9 @@ export default function ClassDetailPage() {
                     id="homeroom-teacher"
                     className="w-full rounded-none"
                   >
-                    <SelectValue placeholder="Unassigned" />
+                    <SelectValue placeholder="Unassigned">
+                      {selectedHomeroomTeacherName}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">Unassigned</SelectItem>

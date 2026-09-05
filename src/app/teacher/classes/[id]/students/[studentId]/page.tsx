@@ -20,9 +20,19 @@ export default function StudentGradingPage() {
   const semesterId = searchParams.get("semester") ?? "sem-1";
 
   const structure = useGradingStructure(classSubjectId, semesterId);
-  const { data, isLoading, saveGrade } = useStudentGrades(classSubjectId, semesterId, studentId);
+  const { data, isLoading, saveGrade } = useStudentGrades(
+    classSubjectId,
+    semesterId,
+    studentId,
+  );
 
-  const total = data?.grades.reduce((sum, g) => (g.status === "graded" ? sum + (g.score ?? 0) : sum), 0) ?? 0;
+  const total =
+    data?.grades.reduce(
+      (sum, g) => (g.status === "graded" ? sum + (g.score ?? 0) : sum),
+      0,
+    ) ?? 0;
+  const totalPossible =
+    data?.grades.reduce((sum, g) => sum + g.maxScore, 0) ?? 0;
 
   return (
     <>
@@ -64,20 +74,25 @@ export default function StudentGradingPage() {
               <p className="text-sm text-muted-foreground">Loading...</p>
             ) : (
               data.grades.map((grade) => (
-                <div key={grade.courseAssessmentId} className="flex items-center gap-3 border-t pt-3 first:border-t-0 first:pt-0">
+                <div
+                  key={grade.courseAssessmentId}
+                  className="flex items-center gap-3 border-t pt-3 first:border-t-0 first:pt-0"
+                >
                   <div className="flex-1">
                     <p className="text-sm font-medium">{grade.componentName}</p>
-                    <p className="text-xs text-muted-foreground">out of {grade.maxScore}</p>
+                    <p className="text-xs text-muted-foreground">
+                      out of {grade.maxScore}
+                    </p>
                   </div>
                   <Input
                     type="number"
                     min={0}
-                    max={grade.maxScore}
                     value={grade.score ?? ""}
                     disabled={grade.status !== "graded"}
                     className="h-8 w-20 rounded-none"
                     onChange={(e) => {
-                      const value = e.target.value === "" ? null : Number(e.target.value);
+                      const value =
+                        e.target.value === "" ? null : Number(e.target.value);
                       saveGrade.mutate({
                         courseAssessmentId: grade.courseAssessmentId,
                         score: value,
@@ -102,7 +117,9 @@ export default function StudentGradingPage() {
             {data && data.grades.length > 0 && (
               <div className="flex items-center justify-between border-t pt-3 text-sm">
                 <span className="font-medium">Total</span>
-                <span className="font-mono font-semibold">{total} / 100</span>
+                <span className="font-mono font-semibold">
+                  {total} / {totalPossible}
+                </span>
               </div>
             )}
           </CardContent>

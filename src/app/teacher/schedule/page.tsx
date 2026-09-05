@@ -17,15 +17,7 @@ import {
 } from "@/components/ui/table";
 import { useTeacherSchedule } from "@/hooks/use-teacher-schedule";
 
-const DAY_ORDER = [
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-  "Sunday",
-];
+const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 
 export default function SchedulePage() {
   const { data, isLoading, isError, error, refetch } = useTeacherSchedule();

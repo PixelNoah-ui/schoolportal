@@ -43,7 +43,7 @@ import {
 } from "@/lib/ranking-utils";
 import type { ClassRow, RankingRow } from "@/lib/mock-data";
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 6;
 const emptyRankingData: RankingRow[] = [];
 const emptyClasses: ClassRow[] = [];
 

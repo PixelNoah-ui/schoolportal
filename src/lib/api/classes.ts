@@ -48,7 +48,16 @@ type ClassRecord = {
       | { profiles: { full_name: string }[] }
       | null;
   }[];
-  homeroom_teacher: { profiles: { full_name: string }[] }[];
+  homeroom_teacher:
+    | {
+        id?: string;
+        profiles?: { full_name: string }[] | { full_name: string } | null;
+      }[]
+    | {
+        id?: string;
+        profiles?: { full_name: string }[] | { full_name: string } | null;
+      }
+    | null;
 };
 
 function asArray<T>(value: T | T[] | null | undefined): T[] {
@@ -57,19 +66,9 @@ function asArray<T>(value: T | T[] | null | undefined): T[] {
 
 function mapClass(classRow: ClassRecord): ClassRow {
   const assignments = asArray(classRow.class_subjects);
-  const teacherNames = [
-    ...new Set(
-      assignments
-        .flatMap((assignment) =>
-          asArray(assignment.teachers).flatMap((teacherRow) =>
-            asArray(teacherRow.profiles).map((profile) => profile.full_name),
-          ),
-        )
-        .filter(Boolean),
-    ),
-  ];
-  const homeroomTeacher =
-    classRow.homeroom_teacher?.[0]?.profiles?.[0]?.full_name;
+  const teacherRow = asArray(classRow.homeroom_teacher)[0];
+  const teacherProfile = asArray(teacherRow?.profiles)[0];
+  const homeroomTeacher = teacherProfile?.full_name ?? "Unassigned";
 
   return {
     id: classRow.id,
@@ -86,9 +85,7 @@ function mapClass(classRow: ClassRecord): ClassRow {
         name: subject.name,
       })),
     ),
-    teacher:
-      homeroomTeacher ??
-      (teacherNames.length ? teacherNames.join(", ") : "Unassigned"),
+    teacher: homeroomTeacher ?? "Unassigned",
   };
 }
 
@@ -96,7 +93,7 @@ export async function fetchClasses({
   search = "",
   academicYearId,
   page = 1,
-  pageSize = 10,
+  pageSize = 6,
 }: ClassListParams = {}): Promise<ClassListResult> {
   const supabase = createClient();
   const from = Math.max(0, page - 1) * pageSize;
@@ -104,7 +101,7 @@ export async function fetchClasses({
   let request = supabase
     .from("classes")
     .select(
-      "id, academic_year_id, academic_years!classes_academic_year_id_fkey(id, name), name, section, grade_levels!classes_grade_level_id_fkey(level_number), homeroom_teacher:teachers!classes_homeroom_teacher_id_fkey(profiles(full_name)), created_at, student_enrollments(id), class_subjects(id, subject_id, subjects(id, name), teachers(profiles(full_name)))",
+      "id, academic_year_id, academic_years!classes_academic_year_id_fkey(id, name), name, section, grade_levels!classes_grade_level_id_fkey(level_number), homeroom_teacher:teachers!classes_homeroom_teacher_id_fkey(id, profiles(full_name)), created_at, student_enrollments(id), class_subjects(id, subject_id, subjects(id, name), teachers(profiles(full_name)))",
       { count: "exact" },
     )
     .order("level_number", { foreignTable: "grade_levels", ascending: true })
@@ -175,24 +172,75 @@ async function ensureGradeLevel(
   return data.id;
 }
 
+async function resolveAcademicYearId(
+  supabase: ReturnType<typeof createClient>,
+  explicitId?: string,
+  classId?: string,
+) {
+  const requestedId = explicitId?.trim();
+  if (requestedId && requestedId !== "all") {
+    return requestedId;
+  }
+
+  if (classId) {
+    const { data: existing, error } = await supabase
+      .from("classes")
+      .select("academic_year_id")
+      .eq("id", classId)
+      .single();
+
+    if (!error && existing?.academic_year_id) {
+      return existing.academic_year_id;
+    }
+  }
+
+  const { data: activeYear, error: activeYearError } = await supabase
+    .from("academic_years")
+    .select("id")
+    .eq("is_current", true)
+    .limit(1)
+    .maybeSingle();
+
+  if (activeYearError) throw new Error(activeYearError.message);
+  if (activeYear?.id) return activeYear.id;
+
+  const { data: fallbackYear, error: fallbackYearError } = await supabase
+    .from("academic_years")
+    .select("id")
+    .order("start_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (fallbackYearError) throw new Error(fallbackYearError.message);
+  if (!fallbackYear?.id) {
+    throw new Error("No academic year exists for this class.");
+  }
+
+  return fallbackYear.id;
+}
+
 export async function createClass(payload: Record<string, string>) {
   const supabase = createClient();
   const grade = Number(payload.grade ?? 0);
   const section = (payload.section ?? "").trim() || "General";
   const className = payload.name?.trim() || buildClassName(grade, section);
   const gradeLevelId = await ensureGradeLevel(supabase, grade);
+  const academicYearId = await resolveAcademicYearId(
+    supabase,
+    payload.academic_year_id,
+  );
 
   const { data, error } = await supabase
     .from("classes")
     .insert({
-      academic_year_id: payload.academic_year_id || null,
+      academic_year_id: academicYearId,
       grade_level_id: gradeLevelId,
       name: className,
       section,
       homeroom_teacher_id: payload.homeroom_teacher || null,
     })
     .select(
-      "id, academic_year_id, academic_years!classes_academic_year_id_fkey(id, name), name, section, grade_levels!classes_grade_level_id_fkey(level_number), homeroom_teacher:teachers!classes_homeroom_teacher_id_fkey(profiles(full_name)), created_at, student_enrollments(id), class_subjects(teachers(profiles(full_name)))",
+      "id, academic_year_id, academic_years!classes_academic_year_id_fkey(id, name), name, section, grade_levels!classes_grade_level_id_fkey(level_number), homeroom_teacher:teachers!classes_homeroom_teacher_id_fkey(id, id, profiles(full_name)), created_at, student_enrollments(id), class_subjects(teachers(profiles(full_name)))",
     )
     .single();
   if (error) throw new Error(error.message);
@@ -205,11 +253,16 @@ export async function updateClass(id: string, payload: Record<string, string>) {
   const section = (payload.section ?? "").trim() || "General";
   const className = payload.name?.trim() || buildClassName(grade, section);
   const gradeLevelId = await ensureGradeLevel(supabase, grade);
+  const academicYearId = await resolveAcademicYearId(
+    supabase,
+    payload.academic_year_id,
+    id,
+  );
 
   const { error } = await supabase
     .from("classes")
     .update({
-      academic_year_id: payload.academic_year_id || null,
+      academic_year_id: academicYearId,
       grade_level_id: gradeLevelId,
       name: className,
       section,
@@ -217,7 +270,7 @@ export async function updateClass(id: string, payload: Record<string, string>) {
     })
     .eq("id", id);
   if (error) throw new Error(error.message);
-  return { id, ...payload, name: className };
+  return { id, ...payload, academic_year_id: academicYearId, name: className };
 }
 
 export async function deleteClass(id: string) {

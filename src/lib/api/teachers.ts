@@ -106,7 +106,7 @@ function mapTeacher(teacher: TeacherRecord): TeacherRow {
 export async function fetchTeachers({
   search = "",
   page = 1,
-  pageSize = 10,
+  pageSize = 6,
 }: TeacherListParams = {}): Promise<TeacherListResult> {
   const supabase = createClient();
   const from = Math.max(0, page - 1) * pageSize;

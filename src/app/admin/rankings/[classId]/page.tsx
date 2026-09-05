@@ -50,7 +50,7 @@ const emptyClasses: {
   studentCount: number;
   teacher: string;
 }[] = [];
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 6;
 
 function initials(name: string) {
   return name

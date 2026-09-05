@@ -52,7 +52,7 @@ export async function fetchTeacherStudents({
   search = "",
   classId,
   page = 1,
-  pageSize = 10,
+  pageSize = 6,
 }: TeacherStudentListParams = {}): Promise<TeacherStudentListResult> {
   const supabase = createClient();
 

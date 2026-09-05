@@ -84,7 +84,7 @@ const statusVariant: Record<
 
 type Tab = "pending" | "all" | "overdue";
 type PaymentFilterStatus = "all" | PaymentStatus;
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 6;
 
 function StatCard({
   label,

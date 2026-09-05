@@ -179,6 +179,7 @@ export default function ClassesPage() {
                     return createdClass;
                   }),
                 );
+                await queryClient.refetchQueries({ queryKey: ["classes"] });
                 toastManager.add({
                   title: "Class created",
                   description: "The class and selected subjects were added.",

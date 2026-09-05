@@ -182,6 +182,7 @@ create table public.assessment_types (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
   description text,
+  default_weight numeric(8,4) not null default 0 check (default_weight >= 0 and default_weight <= 100),
   is_active boolean not null default true,
   created_at timestamptz not null default now()
 );

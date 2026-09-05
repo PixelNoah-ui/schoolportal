@@ -97,7 +97,7 @@ export async function fetchStudents({
   classId,
   academicYearId,
   page = 1,
-  pageSize = 10,
+  pageSize = 6,
 }: StudentListParams = {}): Promise<StudentListResult> {
   const supabase = createClient();
   const from = Math.max(0, page - 1) * pageSize;

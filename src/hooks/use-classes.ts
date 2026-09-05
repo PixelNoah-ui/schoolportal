@@ -42,7 +42,14 @@ export function useUpdateClass() {
       id: string;
       payload: Record<string, string>;
     }) => updateClass(id, payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: classesKey }),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: classesKey });
+      queryClient.invalidateQueries({ queryKey: ["class-subjects"] });
+      queryClient.invalidateQueries({ queryKey: ["class-subjects", id] });
+      queryClient.invalidateQueries({ queryKey: ["available-teachers"] });
+      queryClient.refetchQueries({ queryKey: classesKey });
+      queryClient.refetchQueries({ queryKey: ["available-teachers"] });
+    },
   });
 }
 

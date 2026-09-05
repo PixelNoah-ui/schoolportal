@@ -40,7 +40,7 @@ function mapGrade(grade: GradeRecord): GradeRow {
 export async function fetchGrades({
   search = "",
   page = 1,
-  pageSize = 10,
+  pageSize = 6,
 }: GradeListParams = {}): Promise<GradeListResult> {
   const supabase = createClient();
   const from = Math.max(0, page - 1) * pageSize;

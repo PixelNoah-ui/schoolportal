@@ -5,7 +5,10 @@ import { Lock, Plus, Trash2, Pencil, Check } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { DraftComponent, GradingComponent } from "@/hooks/use-grading-structure";
+import type {
+  DraftComponent,
+  GradingComponent,
+} from "@/hooks/use-grading-structure";
 
 export function GradingStructureEditor({
   components,
@@ -19,10 +22,15 @@ export function GradingStructureEditor({
   onSave: (components: DraftComponent[]) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [draft, setDraft] = useState<DraftComponent[]>(() => toDraft(components));
+  const [draft, setDraft] = useState<DraftComponent[]>(() =>
+    toDraft(components),
+  );
 
-  const total = useMemo(() => draft.reduce((sum, c) => sum + (Number(c.maxScore) || 0), 0), [draft]);
-  const canSave = total === 100 && draft.every((c) => c.name.trim().length > 0);
+  const total = useMemo(
+    () => draft.reduce((sum, c) => sum + (Number(c.maxScore) || 0), 0),
+    [draft],
+  );
+  const canSave = total > 0 && draft.every((c) => c.name.trim().length > 0);
 
   const startEditing = () => {
     setDraft(toDraft(components));
@@ -30,15 +38,24 @@ export function GradingStructureEditor({
   };
 
   const updateRow = (index: number, patch: Partial<DraftComponent>) => {
-    setDraft((rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+    setDraft((rows) =>
+      rows.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    );
   };
 
   const removeRow = (index: number) => {
-    setDraft((rows) => rows.filter((_, i) => i !== index).map((row, i) => ({ ...row, orderNumber: i + 1 })));
+    setDraft((rows) =>
+      rows
+        .filter((_, i) => i !== index)
+        .map((row, i) => ({ ...row, orderNumber: i + 1 })),
+    );
   };
 
   const addRow = () => {
-    setDraft((rows) => [...rows, { name: "", maxScore: 0, orderNumber: rows.length + 1 }]);
+    setDraft((rows) => [
+      ...rows,
+      { name: "", maxScore: 0, orderNumber: rows.length + 1 },
+    ]);
   };
 
   const handleSave = () => {
@@ -54,7 +71,8 @@ export function GradingStructureEditor({
           <div>
             <p className="font-medium">Grading structure locked</p>
             <p className="text-muted-foreground">
-              This structure can&apos;t be changed because grades have already been submitted for it.
+              This structure can&apos;t be changed because grades have already
+              been submitted for it.
             </p>
           </div>
         </CardContent>
@@ -67,7 +85,12 @@ export function GradingStructureEditor({
       <CardHeader className="flex flex-row items-center justify-between p-4 pb-0">
         <p className="text-sm font-semibold">Grading structure</p>
         {!isEditing && (
-          <Button variant="outline" size="sm" className="rounded-none" onClick={startEditing}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-none"
+            onClick={startEditing}
+          >
             <Pencil className="size-3.5" />
             Edit structure
           </Button>
@@ -87,7 +110,9 @@ export function GradingStructureEditor({
                 <Input
                   type="number"
                   value={row.maxScore}
-                  onChange={(e) => updateRow(index, { maxScore: Number(e.target.value) })}
+                  onChange={(e) =>
+                    updateRow(index, { maxScore: Number(e.target.value) })
+                  }
                   className="h-8 w-20 rounded-none"
                 />
                 <Button
@@ -102,14 +127,21 @@ export function GradingStructureEditor({
             ) : (
               <div className="flex w-full items-center justify-between text-sm">
                 <span>{row.name}</span>
-                <span className="font-mono text-muted-foreground">{row.maxScore}</span>
+                <span className="font-mono text-muted-foreground">
+                  {row.maxScore}
+                </span>
               </div>
             )}
           </div>
         ))}
 
         {isEditing && (
-          <Button variant="ghost" size="sm" className="w-fit rounded-none" onClick={addRow}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-fit rounded-none"
+            onClick={addRow}
+          >
             <Plus className="size-3.5" />
             Add component
           </Button>
@@ -121,31 +153,38 @@ export function GradingStructureEditor({
             className={`font-mono font-semibold ${
               !isEditing
                 ? "text-foreground"
-                : total === 100
+                : total > 0
                   ? "text-emerald-600"
-                  : total > 100
-                    ? "text-destructive"
-                    : "text-amber-600"
+                  : "text-amber-600"
             }`}
           >
-            {isEditing ? total : components.reduce((s, c) => s + c.maxScore, 0)} / 100
+            {isEditing ? total : components.reduce((s, c) => s + c.maxScore, 0)}{" "}
+            total marks
           </span>
         </div>
 
-        {isEditing && total !== 100 && (
-          <p className={`text-xs ${total > 100 ? "text-destructive" : "text-amber-600"}`}>
-            {total > 100
-              ? "Maximum total cannot exceed 100."
-              : "Grading structure must total exactly 100."}
+        {isEditing && total <= 0 && (
+          <p className="text-xs text-amber-600">
+            Add at least one component with a positive maximum score.
           </p>
         )}
 
         {isEditing && (
           <div className="flex justify-end gap-2 pt-1">
-            <Button variant="outline" size="sm" className="rounded-none" onClick={() => setIsEditing(false)}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-none"
+              onClick={() => setIsEditing(false)}
+            >
               Cancel
             </Button>
-            <Button size="sm" className="rounded-none" disabled={!canSave || isSaving} onClick={handleSave}>
+            <Button
+              size="sm"
+              className="rounded-none"
+              disabled={!canSave || isSaving}
+              onClick={handleSave}
+            >
               <Check className="size-3.5" />
               {isSaving ? "Saving..." : "Save structure"}
             </Button>
@@ -157,5 +196,9 @@ export function GradingStructureEditor({
 }
 
 function toDraft(components: GradingComponent[]): DraftComponent[] {
-  return components.map((c) => ({ name: c.name, maxScore: c.maxScore, orderNumber: c.orderNumber }));
+  return components.map((c) => ({
+    name: c.name,
+    maxScore: c.maxScore,
+    orderNumber: c.orderNumber,
+  }));
 }

@@ -33,7 +33,7 @@ export async function fetchSubjects({
   search = "",
   classId = "all",
   page = 1,
-  pageSize = 10,
+  pageSize = 6,
 }: SubjectListParams = {}): Promise<SubjectListResult> {
   const supabase = createClient();
   const from = Math.max(0, page - 1) * pageSize;

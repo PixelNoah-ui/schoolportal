@@ -15,19 +15,21 @@ type AssessmentTypeRow = {
   name: string;
   description: string | null;
   is_active: boolean;
+  default_weight: number;
 };
 
 export default function AssessmentsPage() {
   const [rows, setRows] = useState<AssessmentTypeRow[]>([]);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [defaultWeight, setDefaultWeight] = useState("0");
 
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
       const { data } = await supabase
         .from("assessment_types")
-        .select("id, name, description, is_active")
+        .select("id, name, description, is_active, default_weight")
         .order("name");
       setRows((data ?? []) as AssessmentTypeRow[]);
     };
@@ -37,20 +39,37 @@ export default function AssessmentsPage() {
 
   const handleCreate = async () => {
     if (!name.trim()) return;
+    const parsedWeight = Number(defaultWeight);
+    const currentWeight = rows.reduce(
+      (total, row) => total + Number(row.default_weight ?? 0),
+      0,
+    );
+    if (
+      !Number.isFinite(parsedWeight) ||
+      parsedWeight < 0 ||
+      parsedWeight > 100
+    ) {
+      return;
+    }
+    if (currentWeight + parsedWeight > 100) {
+      return;
+    }
     const supabase = createClient();
     const { data } = await supabase
       .from("assessment_types")
       .insert({
         name: name.trim(),
         description: description.trim() || null,
+        default_weight: parsedWeight,
         is_active: true,
       })
-      .select("id, name, description, is_active")
+      .select("id, name, description, is_active, default_weight")
       .single();
     if (data) {
       setRows((current) => [...current, data as AssessmentTypeRow]);
       setName("");
       setDescription("");
+      setDefaultWeight("0");
     }
   };
 
@@ -66,7 +85,7 @@ export default function AssessmentsPage() {
               Add assessment type
             </span>
           </CardHeader>
-          <CardContent className="grid gap-4 pt-6 md:grid-cols-[1fr_1fr_auto]">
+          <CardContent className="grid gap-4 pt-6 md:grid-cols-[1fr_1fr_180px_auto]">
             <div className="space-y-2">
               <Label htmlFor="assessment-name">Name</Label>
               <Input
@@ -84,6 +103,19 @@ export default function AssessmentsPage() {
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
                 placeholder="Short description"
+                className="rounded-none"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="assessment-weight">Default weight (%)</Label>
+              <Input
+                id="assessment-weight"
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={defaultWeight}
+                onChange={(event) => setDefaultWeight(event.target.value)}
                 className="rounded-none"
               />
             </div>
@@ -115,6 +147,9 @@ export default function AssessmentsPage() {
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">
                   {row.description ?? "No description"}
+                </p>
+                <p className="mt-2 text-xs font-medium text-muted-foreground">
+                  Default weight: {row.default_weight}%
                 </p>
               </div>
             ))

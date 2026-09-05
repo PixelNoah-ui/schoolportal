@@ -103,7 +103,7 @@ export async function fetchPayments({
   status = "all",
   search = "",
   page = 1,
-  pageSize = 10,
+  pageSize = 6,
 }: PaymentListParams = {}): Promise<PaymentListResult> {
   const supabase = createClient();
   let request = supabase

@@ -12,6 +12,7 @@ export interface ClassSubjectRow {
 
 export interface ClassSubjectListResult {
   classId: string;
+  academicYearId: string | null;
   className: string;
   grade: number | null;
   section: string | null;
@@ -85,7 +86,7 @@ function mapClassSubject(record: ClassSubjectRecord): ClassSubjectRow {
   const classRow = firstRelation(record.classes);
   const subjectRow = firstRelation(record.subjects);
   const teacherRow = firstRelation(record.teachers);
-  const teacherName = teacherRow?.profiles?.[0]?.full_name ?? null;
+  const teacherName = firstRelation(teacherRow?.profiles)?.full_name ?? null;
   const grade = firstRelation(classRow?.grade_levels)?.level_number;
 
   return {
@@ -120,7 +121,7 @@ export async function fetchClassSubjects({
   const { data: standaloneClass, error: classError } = await supabase
     .from("classes")
     .select(
-      "id, name, grade_levels!classes_grade_level_id_fkey(level_number), section, homeroom_teacher:teachers!classes_homeroom_teacher_id_fkey(id, profiles(full_name))",
+      "id, academic_year_id, name, grade_levels!classes_grade_level_id_fkey(level_number), section, homeroom_teacher:teachers!classes_homeroom_teacher_id_fkey(id, profiles(full_name))",
     )
     .eq("id", classId)
     .single();
@@ -141,13 +142,18 @@ export async function fetchClassSubjects({
 
   return {
     classId,
+    academicYearId: classInfo
+      ? ((classInfo as { academic_year_id?: string | null }).academic_year_id ??
+        null)
+      : null,
     className: classInfo
       ? `Grade ${firstRelation(classInfo.grade_levels)?.level_number ?? ""} - ${classInfo.section ?? ""}`.trim()
       : "Class",
     grade: firstRelation(classInfo?.grade_levels)?.level_number ?? null,
     section: classInfo?.section ?? null,
     homeroomTeacherId: homeroomTeacher?.id ?? null,
-    homeroomTeacherName: homeroomTeacher?.profiles?.[0]?.full_name ?? null,
+    homeroomTeacherName:
+      firstRelation(homeroomTeacher?.profiles)?.full_name ?? null,
     classSubjects: (data ?? []).map((record) =>
       mapClassSubject(record as ClassSubjectRecord),
     ),
@@ -200,10 +206,16 @@ export async function fetchAvailableTeachers(): Promise<{
   if (error) throw new Error(error.message);
 
   return {
-    teachers: (data ?? []).map((teacher) => ({
-      id: teacher.id,
-      name: teacher.profiles?.[0]?.full_name ?? "Unnamed teacher",
-    })),
+    teachers: (data ?? []).map((teacher) => {
+      const profile = Array.isArray(teacher.profiles)
+        ? teacher.profiles[0]
+        : teacher.profiles;
+
+      return {
+        id: teacher.id,
+        name: profile?.full_name ?? "Unnamed teacher",
+      };
+    }),
   };
 }
 
