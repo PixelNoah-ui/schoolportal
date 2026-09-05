@@ -1,7 +1,10 @@
 import { Circle, Lock, CheckCircle2 } from "lucide-react";
 import type { StructureStatus } from "@/hooks/use-teacher-classes";
 
-const CONFIG: Record<StructureStatus, { label: string; className: string; icon: typeof Circle }> = {
+const CONFIG: Record<
+  StructureStatus,
+  { label: string; className: string; icon: typeof Circle }
+> = {
   not_started: {
     label: "Not started",
     className: "text-muted-foreground border-border",
@@ -30,9 +33,11 @@ const CONFIG: Record<StructureStatus, { label: string; className: string; icon: 
 };
 
 export function StructureStatusBadge({ status }: { status: StructureStatus }) {
-  const { label, className, icon: Icon } = CONFIG[status];
+  const { label, className, icon: Icon } = CONFIG[status] ?? CONFIG.not_started;
   return (
-    <span className={`inline-flex items-center gap-1 border px-2 py-0.5 text-[11px] font-medium ${className}`}>
+    <span
+      className={`inline-flex items-center gap-1 border px-2 py-0.5 text-[11px] font-medium ${className}`}
+    >
       <Icon className="size-3" />
       {label}
     </span>

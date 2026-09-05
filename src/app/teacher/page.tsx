@@ -12,15 +12,16 @@ import { SiteHeader } from "@/components/teacher/site-header";
 import { StatCard } from "@/components/admin/stat-card";
 import { StatCardSkeleton } from "@/components/admin/stat-card-skeleton";
 import { ClassCard } from "@/components/teacher/class-card";
-import { ScheduleTable } from "@/components/teacher/schedule-table";
 import { NoClassesEmptyState } from "@/components/teacher/no-classes-empty-state";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { useTeacherDashboard } from "@/hooks/use-teacher-dashboard";
+import { useTeacherClasses } from "@/hooks/use-teacher-classes";
 
 export default function TeacherDashboardPage() {
   const { data, isLoading, isError, error, refetch } = useTeacherDashboard();
+  const classesQuery = useTeacherClasses();
 
   if (isLoading) {
     return (
@@ -28,7 +29,7 @@ export default function TeacherDashboardPage() {
         <SiteHeader title="Dashboard" />
         <div className="flex flex-1 flex-col gap-6 p-6">
           <Skeleton className="h-4 w-40 rounded-none" />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 4 }).map((_, index) => (
               <StatCardSkeleton key={index} />
             ))}
@@ -76,7 +77,7 @@ export default function TeacherDashboardPage() {
                 <p className="text-lg font-semibold text-foreground">
                   Could not load dashboard
                 </p>
-                <p className="text-sm leading-6 text-muted-foreground whitespace-pre-wrap break-words">
+                <p className="text-sm leading-6 text-muted-foreground whitespace-pre-wrap wrap-break-word">
                   {errorMessage}
                 </p>
               </div>
@@ -98,8 +99,8 @@ export default function TeacherDashboardPage() {
 
   if (!data) return null;
 
-  const isEmpty =
-    data.stats.classesCount === 0 && data.recentClasses.length === 0;
+  const classes = classesQuery.data ?? [];
+  const isEmpty = data.stats.classesCount === 0 && classes.length === 0;
 
   if (isEmpty) {
     return (
@@ -114,12 +115,12 @@ export default function TeacherDashboardPage() {
     <>
       <SiteHeader title="Dashboard" subtitle="Welcome back" />
       <div className="flex flex-1 flex-col gap-6 p-6">
-        <div>
+        <div className="w-full">
           <h2 className="text-lg font-semibold">Overview</h2>
           <p className="text-sm text-muted-foreground">Your teaching summary</p>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <StatCard
             label="Classes"
             value={data.stats.classesCount}
@@ -141,44 +142,20 @@ export default function TeacherDashboardPage() {
             icon={BookOpen}
             tone="amber"
           />
-          <StatCard
-            label="Schedule"
-            value={data.stats.upcomingScheduleCount}
-            delta="upcoming sessions"
-            icon={Layers}
-            tone="emerald"
-          />
         </div>
 
-        {data.recentClasses.length > 0 && (
+        {classes.length > 0 && (
           <div>
             <h3 className="mb-4 text-sm font-semibold">Your Classes</h3>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {data.recentClasses.map((classRow) => (
-                <ClassCard
-                  key={classRow.id}
-                  classRow={{
-                    id: classRow.id,
-                    subjectName: classRow.subjectName,
-                    className: classRow.className,
-                    classGrade: 0,
-                    classSection: "",
-                    studentCount: classRow.studentCount,
-                    semester: classRow.semester,
-                    semesterId: "",
-                  }}
-                />
+            <div
+              className={`grid grid-cols-1 gap-4 ${
+                classes.length > 1 ? "sm:grid-cols-2" : ""
+              } ${classes.length > 2 ? "lg:grid-cols-3" : ""}`}
+            >
+              {classes.slice(0, 6).map((classRow) => (
+                <ClassCard key={classRow.id} classRow={classRow} />
               ))}
             </div>
-          </div>
-        )}
-
-        {data.upcomingSchedule.length > 0 && (
-          <div>
-            <ScheduleTable
-              schedules={data.upcomingSchedule}
-              onRefresh={refetch}
-            />
           </div>
         )}
       </div>

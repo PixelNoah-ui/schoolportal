@@ -311,6 +311,59 @@ create trigger teachers_updated_at before update on public.teachers for each row
 create trigger students_updated_at before update on public.students for each row execute function public.set_updated_at();
 create trigger grades_updated_at before update on public.grades for each row execute function public.set_updated_at();
 
+-- Keep each submitted score within its assessment's configured maximum.
+create or replace function public.validate_assessment_result_score()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  assessment_max numeric(8,2);
+begin
+  if new.score is null then
+    return new;
+  end if;
+
+  select max_score into assessment_max
+  from public.course_assessments
+  where id = new.course_assessment_id;
+
+  if new.score < 0 or new.score > assessment_max then
+    raise exception 'Score must be between 0 and %', assessment_max;
+  end if;
+
+  return new;
+end $$;
+create trigger assessment_results_score_limit
+before insert or update of score, course_assessment_id
+on public.assessment_results
+for each row execute function public.validate_assessment_result_score();
+
+create or replace function public.validate_grading_structure_total()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare structure_total numeric;
+begin
+  select coalesce(sum(max_score), 0) into structure_total
+  from public.course_assessments
+  where class_subject_id = new.class_subject_id
+    and semester_id = new.semester_id
+    and id <> new.id;
+  if structure_total + new.max_score > 100 then
+    raise exception 'Grading structure cannot exceed 100 total marks';
+  end if;
+  return new;
+end $$;
+create constraint trigger grading_structure_total_limit
+after insert or update of max_score, class_subject_id, semester_id
+on public.course_assessments
+deferrable initially deferred
+for each row execute function public.validate_grading_structure_total();
+
 -- Server-controlled role lookup. SECURITY DEFINER avoids recursive profiles RLS checks.
 create or replace function public.current_user_role() returns public.user_role
 language sql stable security definer set search_path = public

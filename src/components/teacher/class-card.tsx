@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { BookOpen, Users, ChevronRight } from "lucide-react";
+import { BookOpen, Users, ChevronRight, CircleDot } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { StructureStatusBadge } from "@/components/teacher/structure-status-badge";
 import type { TeacherClassRow } from "@/hooks/use-teacher-classes";
 
 export function ClassCard({ classRow }: { classRow: TeacherClassRow }) {
@@ -13,18 +12,34 @@ export function ClassCard({ classRow }: { classRow: TeacherClassRow }) {
             <div className="flex size-9 items-center justify-center border bg-muted/40">
               <BookOpen className="size-4 text-muted-foreground" />
             </div>
-            <StructureStatusBadge status={classRow.structureStatus} />
+            {classRow.isHomeroom && (
+              <span
+                className="inline-flex items-center gap-1 text-xs font-medium text-foreground"
+                aria-label="Selected as homeroom"
+                title="Selected as homeroom"
+              >
+                <CircleDot className="size-4" />
+                Homeroom
+              </span>
+            )}
           </div>
 
           <div>
-            <p className="text-sm font-semibold leading-tight">{classRow.subjectName}</p>
-            <p className="mt-0.5 text-sm text-muted-foreground">Grade {classRow.className}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold leading-tight">
+                {classRow.subjectName}
+              </p>
+            </div>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Grade {classRow.className}
+            </p>
           </div>
 
           <div className="flex items-center justify-between border-t pt-3 text-sm text-muted-foreground">
             <span className="flex items-center gap-1.5">
               <Users className="size-3.5" />
-              {classRow.studentCount} student{classRow.studentCount === 1 ? "" : "s"}
+              {classRow.studentCount} student
+              {classRow.studentCount === 1 ? "" : "s"}
             </span>
             <ChevronRight className="size-4 transition-transform group-hover:translate-x-0.5" />
           </div>

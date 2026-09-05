@@ -5,6 +5,7 @@ import { Lock, Plus, Trash2, Pencil, Check } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import type {
   DraftComponent,
   GradingComponent,
@@ -30,7 +31,10 @@ export function GradingStructureEditor({
     () => draft.reduce((sum, c) => sum + (Number(c.maxScore) || 0), 0),
     [draft],
   );
-  const canSave = total > 0 && draft.every((c) => c.name.trim().length > 0);
+  const canSave =
+    total > 0 &&
+    total <= 100 &&
+    draft.every((c) => c.name.trim().length > 0 && Number(c.maxScore) > 0);
 
   const startEditing = () => {
     setDraft(toDraft(components));
@@ -80,6 +84,27 @@ export function GradingStructureEditor({
     );
   }
 
+  if (isSaving) {
+    return (
+      <Card className="rounded-none shadow-none">
+        <CardContent className="space-y-4 p-4">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-4 w-36 rounded-none" />
+            <Skeleton className="h-8 w-28 rounded-none" />
+          </div>
+          {Array.from({ length: Math.max(2, components.length) }).map(
+            (_, index) => (
+              <div key={index} className="flex gap-2">
+                <Skeleton className="h-8 flex-1 rounded-none" />
+                <Skeleton className="h-8 w-20 rounded-none" />
+              </div>
+            ),
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="rounded-none shadow-none">
       <CardHeader className="flex flex-row items-center justify-between p-4 pb-0">
@@ -111,7 +136,10 @@ export function GradingStructureEditor({
                   type="number"
                   value={row.maxScore}
                   onChange={(e) =>
-                    updateRow(index, { maxScore: Number(e.target.value) })
+                    updateRow(index, {
+                      maxScore:
+                        e.target.value === "" ? "" : Number(e.target.value),
+                    })
                   }
                   className="h-8 w-20 rounded-none"
                 />
@@ -169,6 +197,12 @@ export function GradingStructureEditor({
           </p>
         )}
 
+        {isEditing && total > 100 && (
+          <p className="text-xs text-destructive">
+            The grading structure cannot exceed 100 total marks.
+          </p>
+        )}
+
         {isEditing && (
           <div className="flex justify-end gap-2 pt-1">
             <Button
@@ -197,6 +231,7 @@ export function GradingStructureEditor({
 
 function toDraft(components: GradingComponent[]): DraftComponent[] {
   return components.map((c) => ({
+    id: c.id,
     name: c.name,
     maxScore: c.maxScore,
     orderNumber: c.orderNumber,

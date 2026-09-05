@@ -48,6 +48,7 @@ interface TeacherAssignment {
   subjectId: string;
   classId: string;
   subjectName?: string;
+  className?: string;
 }
 
 type TeacherFormValues = Record<string, unknown> & {
@@ -82,6 +83,7 @@ export function TeacherFormDialog({
   const [email, setEmail] = useState(initialValues?.email ?? "");
   const [phone, setPhone] = useState(initialValues?.phone ?? "");
   const [gender, setGender] = useState(initialValues?.gender ?? "");
+  const [selectionNeedsAdd, setSelectionNeedsAdd] = useState(false);
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [classes, setClasses] = useState<ClassOption[]>([]);
@@ -113,7 +115,7 @@ export function TeacherFormDialog({
       const { data, error } = await supabase
         .from("teachers")
         .select(
-          "phone, gender, profiles!teachers_profile_id_fkey(full_name, email), class_subjects(subject_id, class_id, subjects(id, name))",
+          "phone, gender, profiles!teachers_profile_id_fkey(full_name, email), class_subjects(subject_id, class_id, subjects(id, name), classes(name, section, grade_levels!classes_grade_level_id_fkey(level_number)))",
         )
         .eq("id", id)
         .single();
@@ -126,19 +128,44 @@ export function TeacherFormDialog({
       setEmail(profile?.email ?? "");
       setPhone(data.phone ?? "");
       setGender(data.gender ?? "");
-      setAssignments(
-        (data.class_subjects ?? []).map((assignment) => {
-          const subjectData = assignment.subjects as unknown;
-          const subject = Array.isArray(subjectData)
-            ? (subjectData[0] as { name?: string } | undefined)
-            : (subjectData as { name?: string } | null);
-          return {
-            subjectId: assignment.subject_id,
-            classId: assignment.class_id,
-            subjectName: subject?.name,
-          };
-        }),
-      );
+      const savedAssignments = (data.class_subjects ?? []).map((assignment) => {
+        const subjectData = assignment.subjects as unknown;
+        const subject = Array.isArray(subjectData)
+          ? (subjectData[0] as { name?: string } | undefined)
+          : (subjectData as { name?: string } | null);
+        const classData = Array.isArray(assignment.classes)
+          ? assignment.classes[0]
+          : assignment.classes;
+        const gradeLevels = Array.isArray(classData?.grade_levels)
+          ? classData.grade_levels[0]
+          : classData?.grade_levels;
+        return {
+          subjectId: assignment.subject_id,
+          classId: assignment.class_id,
+          subjectName: subject?.name,
+          className: classData
+            ? `Grade ${gradeLevels?.level_number ?? "-"}${classData.section ? ` - ${classData.section}` : ""}`
+            : undefined,
+        };
+      });
+      setAssignments(savedAssignments);
+      const firstAssignment = savedAssignments[0];
+      const firstClass = firstAssignment
+        ? (data.class_subjects ?? []).find(
+            (assignment) => assignment.class_id === firstAssignment.classId,
+          )
+        : undefined;
+      const firstClassData = Array.isArray(firstClass?.classes)
+        ? firstClass.classes[0]
+        : firstClass?.classes;
+      const firstGradeLevels = Array.isArray(firstClassData?.grade_levels)
+        ? firstClassData.grade_levels[0]
+        : firstClassData?.grade_levels;
+      if (firstAssignment && firstGradeLevels?.level_number) {
+        setSelectedGrade(firstGradeLevels.level_number);
+        setSelectedSubject(firstAssignment.subjectId);
+        setSelectedClass(firstAssignment.classId);
+      }
     } catch (error) {
       console.error("Error loading teacher:", error);
     } finally {
@@ -206,6 +233,7 @@ export function TeacherFormDialog({
       map[classItem.grade] = [...(map[classItem.grade] ?? []), classItem];
     }
     return map;
+    setSelectionNeedsAdd(true);
   }, [classes]);
 
   const classesForSelectedGrade = useMemo(
@@ -226,15 +254,18 @@ export function TeacherFormDialog({
     setSelectedGrade(grade);
     setSelectedSubject("");
     setSelectedClass("");
+    setSelectionNeedsAdd(true);
   }
 
   function handleSelectSubject(subjectId: string) {
     setSelectedSubject(subjectId);
     setSelectedClass("");
+    setSelectionNeedsAdd(true);
   }
 
   function handleSelectClass(classId: string) {
     setSelectedClass(classId);
+    setSelectionNeedsAdd(true);
   }
 
   function addAssignments() {
@@ -245,8 +276,13 @@ export function TeacherFormDialog({
           assignment.classId === selectedClass &&
           assignment.subjectId === selectedSubject,
       )
-    )
+    ) {
+      setSelectionNeedsAdd(false);
+      setSelectedGrade(null);
+      setSelectedClass("");
+      setSelectedSubject("");
       return;
+    }
     setAssignments((prev) => [
       ...prev,
       {
@@ -259,6 +295,7 @@ export function TeacherFormDialog({
     setSelectedGrade(null);
     setSelectedClass("");
     setSelectedSubject("");
+    setSelectionNeedsAdd(false);
   }
 
   function removeAssignment(index: number) {
@@ -266,17 +303,27 @@ export function TeacherFormDialog({
   }
 
   function getSubjectName(subjectId: string): string {
-    return subjects.find((s) => s.id === subjectId)?.name ?? "Unknown";
+    return (
+      subjects.find((s) => s.id === subjectId)?.name ??
+      assignments.find((assignment) => assignment.subjectId === subjectId)
+        ?.subjectName ??
+      "Unknown"
+    );
   }
 
   function getClassName(classId: string): string {
     const classInfo = classes.find((c) => c.id === classId);
-    if (!classInfo) return "Unknown";
+    if (!classInfo) {
+      return (
+        assignments.find((assignment) => assignment.classId === classId)
+          ?.className ?? "Unknown"
+      );
+    }
     return `Grade ${classInfo.grade}${classInfo.section ? ` - ${classInfo.section}` : ""}`;
   }
 
   async function handleSubmit() {
-    if (isLoading) return;
+    if (isLoading || selectionNeedsAdd || assignments.length === 0) return;
     if (!fullName.trim() || !email.trim()) {
       alert("Name and email are required");
       return;
@@ -303,6 +350,7 @@ export function TeacherFormDialog({
     setSelectedGrade(null);
     setSelectedClass("");
     setSelectedSubject("");
+    setSelectionNeedsAdd(false);
     setAssignments([]);
   }
 
@@ -569,7 +617,9 @@ export function TeacherFormDialog({
             size="sm"
             className="rounded-none text-xs"
             onClick={handleSubmit}
-            disabled={isLoading}
+            disabled={
+              isLoading || assignments.length === 0 || selectionNeedsAdd
+            }
           >
             {isLoading ? (
               <>

@@ -14,10 +14,12 @@ export interface TeacherDashboardData {
   };
   recentClasses: {
     id: string;
+    classId: string;
     subjectName: string;
     className: string;
+    gradeLevel: number;
     studentCount: number;
-    semester: string;
+    isHomeroom: boolean;
   }[];
   upcomingSchedule: {
     id: string;
@@ -40,8 +42,37 @@ type TeacherDashboardClassSubject = {
   class_id: string;
   subject_id: string;
   subjects: { id: string; name: string }[];
-  classes: { id: string; name: string }[];
+  classes:
+    | {
+        id: string;
+        name: string;
+        section: string | null;
+        grade_levels: { level_number: number }[];
+      }
+    | {
+        id: string;
+        name: string;
+        section: string | null;
+        homeroom_teacher_id?: string | null;
+        grade_levels:
+          | { level_number: number }[]
+          | { level_number: number }
+          | null;
+      }
+    | null;
 };
+
+type DashboardClassRelation = {
+  id: string;
+  name: string;
+  section: string | null;
+  homeroom_teacher_id?: string | null;
+  grade_levels: { level_number: number } | { level_number: number }[] | null;
+};
+
+function firstRelation<T>(relation: T | T[] | null | undefined): T | undefined {
+  return Array.isArray(relation) ? relation[0] : (relation ?? undefined);
+}
 
 type TeacherDashboardSchedule = {
   id: string;
@@ -51,7 +82,11 @@ type TeacherDashboardSchedule = {
   class_subjects: {
     teacher_id: string;
     subjects: { name: string }[];
-    classes: { name: string }[];
+    classes: {
+      name: string;
+      section: string | null;
+      grade_levels: { level_number: number }[];
+    }[];
   }[];
 };
 
@@ -113,7 +148,7 @@ export async function fetchTeacherDashboard(): Promise<TeacherDashboardData> {
         class_id,
         subject_id,
         subjects(id, name),
-        classes(id, name)
+        classes(id, name, section, homeroom_teacher_id, grade_levels!classes_grade_level_id_fkey(level_number))
       `,
       )
       .eq("teacher_id", teacher.id);
@@ -124,7 +159,7 @@ export async function fetchTeacherDashboard(): Promise<TeacherDashboardData> {
     console.log("✅ Class subjects loaded:", classSubjectsData?.length || 0);
 
     const classSubjects = (classSubjectsData ||
-      []) as TeacherDashboardClassSubject[];
+      []) as unknown as TeacherDashboardClassSubject[];
 
     // Get unique classes and subjects
     const uniqueClassIds = new Set(classSubjects.map((cs) => cs.class_id));
@@ -149,29 +184,28 @@ export async function fetchTeacherDashboard(): Promise<TeacherDashboardData> {
     const totalStudents = (studentEnrollments || []).length;
 
     // Format recent classes (limit to 6)
-    const recentClasses = classSubjects.slice(0, 6).map((cs) => ({
-      id: cs.id,
-      subjectName: cs.subjects?.[0]?.name ?? "Unknown",
-      className: cs.classes?.[0]?.name ?? "Unknown",
-      studentCount: 0, // Will calculate per class if needed
-      semester: "Current",
-    }));
+    const recentClasses = classSubjects.slice(0, 6).map((cs) => {
+      // Supabase may return to-one relations as an object or a one-item array.
+      // Normalize both shapes before building the dashboard card.
+      const classRow = firstRelation(cs.classes) as
+        | DashboardClassRelation
+        | undefined;
+      const subject = firstRelation(cs.subjects);
+      const gradeLevels = firstRelation(classRow?.grade_levels);
+      const gradeLevel = gradeLevels?.level_number ?? 0;
 
-    // Fetch current semester for display
-    const { data: currentSemester, error: semError } = await supabase
-      .from("semesters")
-      .select("name")
-      .eq("status", "active")
-      .single();
-
-    if (semError) {
-      console.warn("⚠️ Semester fetch warning:", semError.message);
-    } else if (currentSemester) {
-      console.log("✅ Semester loaded:", currentSemester.name);
-      recentClasses.forEach((rc) => {
-        rc.semester = currentSemester.name;
-      });
-    }
+      return {
+        id: cs.id,
+        subjectName: subject?.name ?? "Unknown subject",
+        classId: cs.class_id,
+        className: classRow
+          ? `${gradeLevel || "-"}${classRow.section ?? ""}`
+          : "Unknown",
+        gradeLevel,
+        studentCount: 0,
+        isHomeroom: classRow?.homeroom_teacher_id === teacher.id,
+      };
+    });
 
     // Fetch upcoming schedules for this teacher
     const { data: schedulesData, error: schedError } = await supabase
@@ -183,10 +217,10 @@ export async function fetchTeacherDashboard(): Promise<TeacherDashboardData> {
         day_of_week,
         start_time,
         end_time,
-        class_subjects(
+        class_subjects!inner(
           teacher_id,
           subjects(name),
-          classes(name)
+          classes(name, section, grade_levels!classes_grade_level_id_fkey(level_number))
         )
       `,
       )
@@ -204,9 +238,28 @@ export async function fetchTeacherDashboard(): Promise<TeacherDashboardData> {
       return {
         id: schedule.id,
         subject: schedule.class_subjects?.[0]?.subjects?.[0]?.name ?? "Unknown",
-        className:
-          schedule.class_subjects?.[0]?.classes?.[0]?.name ?? "Unknown",
-        dayOfWeek: schedule.day_of_week,
+        className: (() => {
+          const classRow = schedule.class_subjects?.[0]?.classes?.[0];
+          const grade = classRow?.grade_levels?.[0]?.level_number;
+          return classRow
+            ? `${grade ?? "-"}${classRow.section ?? ""}`
+            : "Unknown";
+        })(),
+        dayOfWeek: (() => {
+          const dayNames = [
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+            "Sunday",
+          ];
+          const day = Number(schedule.day_of_week);
+          return Number.isInteger(day)
+            ? (dayNames[day] ?? String(schedule.day_of_week))
+            : schedule.day_of_week;
+        })(),
         startTime: schedule.start_time,
         endTime: schedule.end_time,
       };

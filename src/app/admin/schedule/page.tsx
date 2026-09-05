@@ -50,8 +50,8 @@ export default function SchedulePage() {
   const [selectedGrade, setSelectedGrade] = useState("");
   const [selectedSection, setSelectedSection] = useState("");
   const [slotsByDay, setSlotsByDay] = useState<Record<string, DraftSlot[]>>({});
-  const [selectedDays, setSelectedDays] = useState<string[]>(["Monday"]);
-  const [activeDay, setActiveDay] = useState<string>("Monday");
+  const [selectedDays, setSelectedDays] = useState<string[]>([]);
+  const [activeDay, setActiveDay] = useState<string>("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [, setFormError] = useState<string | null>(null);
 
@@ -59,8 +59,8 @@ export default function SchedulePage() {
     setSlotsByDay({});
     setSelectedGrade("");
     setSelectedSection("");
-    setSelectedDays(["Monday"]);
-    setActiveDay("Monday");
+    setSelectedDays([]);
+    setActiveDay("");
     setEditingId(null);
     setFormError(null);
   };
@@ -114,7 +114,7 @@ export default function SchedulePage() {
       courses.filter(
         (course) =>
           course.grade === Number(selectedGrade) &&
-          (course.section ?? "") === selectedSection,
+          (!selectedSection || (course.section ?? "") === selectedSection),
       ),
     [courses, selectedGrade, selectedSection],
   );
@@ -133,21 +133,21 @@ export default function SchedulePage() {
   }, [schedules]);
 
   const toggleDay = (day: string) => {
-    setSelectedDays((previous) => {
-      if (previous.includes(day)) {
-        const next = previous.filter((item) => item !== day);
-        if (activeDay === day) setActiveDay(next[0] ?? "");
-        return next;
-      }
-      setActiveDay(day);
-      setSlotsByDay((slots) => ({
-        ...slots,
-        [day]: slots[day] ?? [
-          { subjectId: "", startTime: "08:00", endTime: "09:00" },
-        ],
-      }));
-      return [...previous, day];
-    });
+    if (selectedDays.includes(day)) {
+      const next = selectedDays.filter((item) => item !== day);
+      setSelectedDays(next);
+      if (activeDay === day) setActiveDay(next[0] ?? "");
+      return;
+    }
+
+    setSelectedDays([...selectedDays, day]);
+    setActiveDay(day);
+    setSlotsByDay((slots) => ({
+      ...slots,
+      [day]: slots[day] ?? [
+        { subjectId: "", startTime: "08:00", endTime: "09:00" },
+      ],
+    }));
   };
 
   const removeDay = (day: string) => {
@@ -218,15 +218,16 @@ export default function SchedulePage() {
   const handleSectionChange = (value: string | null) => {
     const nextSection = value ?? "";
     setSelectedSection(nextSection);
-    setSlotsByDay(
-      nextSection
-        ? {
-            [activeDay || "Monday"]: [
-              { subjectId: "", startTime: "08:00", endTime: "09:00" },
-            ],
-          }
-        : {},
-    );
+    if (!nextSection || !activeDay) {
+      setSlotsByDay({});
+      return;
+    }
+    setSlotsByDay((previous) => ({
+      ...previous,
+      [activeDay]: previous[activeDay] ?? [
+        { subjectId: "", startTime: "08:00", endTime: "09:00" },
+      ],
+    }));
   };
 
   const handleSubmit = () => {
@@ -617,9 +618,14 @@ export default function SchedulePage() {
                   </div>
                 </div>
               ) : null}
+              {!activeDay ? (
+                <p className="text-xs text-muted-foreground">
+                  Select a day to add subjects.
+                </p>
+              ) : null}
               {!loadingCourses && filteredCourses.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  Select a class and section to see assigned subjects.
+                  Select a class to see available subjects.
                 </p>
               ) : null}
             </div>

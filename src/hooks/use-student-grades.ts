@@ -18,6 +18,13 @@ export interface StudentComponentGrade {
   status: GradeStatus;
 }
 
+export interface StudentGradeDraft {
+  courseAssessmentId: string;
+  maxScore: number;
+  score: number | null;
+  status: GradeStatus;
+}
+
 export interface StudentHeader {
   studentId: string;
   fullName: string;
@@ -43,10 +50,30 @@ export function useStudentGrades(
     }> => {
       const { data: classSubject, error: csError } = await supabase
         .from("class_subjects")
-        .select("classes ( grade, section ), subjects ( name )")
+        .select(
+          "class_id, subject_id, semester_id, classes ( section, grade_levels!classes_grade_level_id_fkey(level_number) ), subjects ( name )",
+        )
         .eq("id", classSubjectId)
         .single();
       if (csError) throw csError;
+
+      const { data: semesterClassSubject, error: semesterClassSubjectError } =
+        await supabase
+          .from("class_subjects")
+          .select("id, semester_id")
+          .eq("class_id", classSubject.class_id)
+          .eq("subject_id", classSubject.subject_id)
+          .eq(
+            "semester_id",
+            semesterId.startsWith("sem-")
+              ? classSubject.semester_id
+              : semesterId,
+          )
+          .maybeSingle();
+      if (semesterClassSubjectError) throw semesterClassSubjectError;
+      const activeClassSubjectId = semesterClassSubject?.id ?? classSubjectId;
+      const activeSemesterId =
+        semesterClassSubject?.semester_id ?? classSubject.semester_id;
 
       const { data: student, error: studentError } = await supabase
         .from("students")
@@ -58,8 +85,8 @@ export function useStudentGrades(
       const { data: components, error: componentsError } = await supabase
         .from("course_assessments")
         .select("id, name, max_score, order_number")
-        .eq("class_subject_id", classSubjectId)
-        .eq("semester_id", semesterId)
+        .eq("class_subject_id", activeClassSubjectId)
+        .eq("semester_id", activeSemesterId)
         .order("order_number");
       if (componentsError) throw componentsError;
 
@@ -77,11 +104,18 @@ export function useStudentGrades(
         (results ?? []).map((r) => [r.course_assessment_id, r]),
       );
 
+      const displayStatus = (status?: string): GradeStatus => {
+        if (status === "submitted") return "graded";
+        if (status === "approved") return "exempt";
+        if (status === "rejected") return "absent";
+        return "not_taken";
+      };
+
       return {
         header: {
           studentId,
           fullName: (student as any).profiles?.full_name ?? "Unnamed student",
-          className: `${(classSubject as any).classes?.grade ?? ""}${(classSubject as any).classes?.section ?? ""}`,
+          className: `${(classSubject as any).classes?.grade_levels?.level_number ?? ""}${(classSubject as any).classes?.section ?? ""}`,
           subjectName: (classSubject as any).subjects?.name ?? "",
         },
         grades: (components ?? []).map((c) => {
@@ -91,33 +125,90 @@ export function useStudentGrades(
             componentName: c.name,
             maxScore: Number(c.max_score),
             score: result?.score != null ? Number(result.score) : null,
-            status: (result?.status ?? "not_taken") as GradeStatus,
+            status: displayStatus(result?.status),
           };
         }),
       };
     },
   });
 
-  const saveGrade = useMutation({
-    mutationFn: async (input: {
-      courseAssessmentId: string;
-      score: number | null;
-      status: GradeStatus;
-    }) => {
-      const { error } = await supabase.from("assessment_results").upsert(
-        {
-          student_id: studentId,
-          course_assessment_id: input.courseAssessmentId,
-          score: input.status === "graded" ? input.score : null,
-          status: input.status,
-          source: "teacher",
-        },
-        { onConflict: "student_id,course_assessment_id" },
+  const submitGrades = useMutation({
+    mutationFn: async (grades: StudentGradeDraft[]) => {
+      const { data: classSubject, error: classSubjectError } = await supabase
+        .from("class_subjects")
+        .select("class_id, subject_id, semester_id")
+        .eq("id", classSubjectId)
+        .single();
+      if (classSubjectError) throw classSubjectError;
+
+      const { data: semesterClassSubject, error: semesterClassSubjectError } =
+        await supabase
+          .from("class_subjects")
+          .select("id, semester_id")
+          .eq("class_id", classSubject.class_id)
+          .eq("subject_id", classSubject.subject_id)
+          .eq(
+            "semester_id",
+            semesterId.startsWith("sem-")
+              ? classSubject.semester_id
+              : semesterId,
+          )
+          .maybeSingle();
+      if (semesterClassSubjectError) throw semesterClassSubjectError;
+      const activeClassSubjectId = semesterClassSubject?.id ?? classSubjectId;
+      const activeSemesterId =
+        semesterClassSubject?.semester_id ?? classSubject.semester_id;
+
+      const { data: assessments, error: assessmentsError } = await supabase
+        .from("course_assessments")
+        .select("id, name, max_score")
+        .eq("class_subject_id", activeClassSubjectId)
+        .eq("semester_id", activeSemesterId);
+      if (assessmentsError) throw assessmentsError;
+
+      const assessmentById = new Map(
+        (assessments ?? []).map((assessment) => [assessment.id, assessment]),
       );
-      if (error) throw error;
+      for (const grade of grades) {
+        if (grade.status !== "graded" || grade.score == null) continue;
+        const assessment = assessmentById.get(grade.courseAssessmentId);
+        const maxScore = Number(assessment?.max_score ?? grade.maxScore);
+        if (grade.score < 0 || grade.score > maxScore) {
+          throw new Error(
+            `${assessment?.name ?? "This grade"} must be between 0 and ${maxScore}.`,
+          );
+        }
+      }
+
+      const { error: resultsError } = await supabase
+        .from("assessment_results")
+        .upsert(
+          grades.map((grade) => ({
+            student_id: studentId,
+            course_assessment_id: grade.courseAssessmentId,
+            score: grade.status === "graded" ? grade.score : null,
+            // The database uses draft/submitted states; the UI keeps the
+            // teacher-facing statuses and submits the complete set together.
+            status:
+              grade.status === "graded"
+                ? "submitted"
+                : grade.status === "exempt"
+                  ? "approved"
+                  : grade.status === "absent"
+                    ? "rejected"
+                    : "draft",
+          })),
+          { onConflict: "student_id,course_assessment_id" },
+        );
+      if (resultsError) throw resultsError;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({
+        queryKey: ["class-roster", classSubjectId],
+      });
+    },
   });
 
-  return { ...query, saveGrade };
+  return { ...query, submitGrades };
 }
