@@ -1,36 +1,207 @@
 "use client";
 
-import { useState } from "react";
-import { AlertTriangle, BookOpen } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  BookOpen,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { StudentSiteHeader } from "@/components/student/site-header";
-import {
-  useStudentFilterOptions,
-  useStudentResults,
-} from "@/hooks/use-student-portal";
+import { Button } from "@/components/ui/button";
+import { useStudentResults } from "@/hooks/use-student-portal";
+
+type ResultComponent = {
+  name: string;
+  score: number | null;
+  maxScore: number;
+  status: string;
+};
+
+type ResultRow = {
+  id: string;
+  subject: string;
+  className: string;
+  semester: string;
+  academicYear: string;
+  score: number | null;
+  maxScore: number;
+  components: ResultComponent[];
+};
+
+// Sums only graded (non-null) components. isComplete is true only when
+// EVERY component of the subject has a score — that's the signal that
+// decides whether we show a real total or "—".
+function componentTotals(components: ResultComponent[]) {
+  const graded = components.filter((c) => c.score !== null);
+  const scoreSum = graded.reduce((sum, c) => sum + (c.score ?? 0), 0);
+  const maxSum = graded.reduce((sum, c) => sum + c.maxScore, 0);
+  const isComplete =
+    components.length > 0 && graded.length === components.length;
+  return {
+    scoreSum,
+    maxSum,
+    isComplete,
+    gradedCount: graded.length,
+    totalCount: components.length,
+  };
+}
+
+function SubjectRow({ result }: { result: ResultRow }) {
+  const [open, setOpen] = useState(false);
+  const totals = componentTotals(result.components);
+
+  return (
+    <>
+      <TableRow
+        className="cursor-pointer select-none hover:bg-muted/40"
+        onClick={() => setOpen((value) => !value)}
+      >
+        <TableCell className="w-8">
+          {open ? (
+            <ChevronDown className="size-4 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="size-4 text-muted-foreground" />
+          )}
+        </TableCell>
+        <TableCell className="font-medium">{result.subject}</TableCell>
+        <TableCell className="text-sm text-muted-foreground">
+          {result.className}
+        </TableCell>
+        <TableCell className="text-right font-medium tabular-nums">
+          {totals.isComplete ? `${totals.scoreSum} / ${totals.maxSum}` : "—"}
+        </TableCell>
+      </TableRow>
+      {open && (
+        <TableRow className="hover:bg-transparent">
+          <TableCell colSpan={4} className="bg-muted/20 p-0">
+            <div className="p-4">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>Result details</TableHead>
+                    <TableHead className="w-[20%]">Status</TableHead>
+                    <TableHead className="w-[20%] text-right">Score</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {result.components.map((component, index) => (
+                    <TableRow
+                      key={`${component.name}-${index}`}
+                      className="hover:bg-transparent"
+                    >
+                      <TableCell className="text-sm">
+                        {component.name}
+                      </TableCell>
+                      <TableCell className="text-xs capitalize text-muted-foreground">
+                        {component.status}
+                      </TableCell>
+                      <TableCell className="text-right text-sm tabular-nums">
+                        {component.score ?? "—"} / {component.maxScore}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </TableCell>
+        </TableRow>
+      )}
+    </>
+  );
+}
+
+function SemesterSection({
+  academicYear,
+  semester,
+  rows,
+}: {
+  academicYear: string;
+  semester: string;
+  rows: ResultRow[];
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Card className="rounded-none shadow-none">
+      <CardHeader className="flex flex-col gap-4 border-b bg-muted/30 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold">{semester}</p>
+          <p className="text-xs text-muted-foreground">{academicYear}</p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="rounded-none"
+          onClick={() => setOpen((value) => !value)}
+        >
+          {open ? "Hide" : "Details"}
+        </Button>
+      </CardHeader>
+      {open && (
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="w-8" />
+                <TableHead className="w-[34%]">Subject</TableHead>
+                <TableHead className="w-[28%]">Class</TableHead>
+                <TableHead className="text-right">Result</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((result) => (
+                <SubjectRow key={result.id} result={result} />
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      )}
+    </Card>
+  );
+}
 
 export default function StudentResultsPage() {
-  const [year, setYear] = useState("");
-  const [semester, setSemester] = useState("");
-  const options = useStudentFilterOptions();
-  const results = useStudentResults({
-    academicYearId: year || undefined,
-    semesterId: semester || undefined,
-  });
+  const results = useStudentResults({});
+
   const resultError =
     results.error instanceof Error
       ? results.error.message
       : "Please try again later.";
-  const optionsError =
-    options.error instanceof Error ? options.error.message : null;
+  const data = useMemo<ResultRow[]>(() => results.data ?? [], [results.data]);
+
+  // Group flat subject rows into per-semester sections. NOTE: this assumes
+  // fetchStudentResults returns rows already ordered chronologically by
+  // semester — if not, groups here will render in whatever order the API
+  // returns them in.
+  const groups = useMemo(() => {
+    const map = new Map<
+      string,
+      { academicYear: string; semester: string; rows: ResultRow[] }
+    >();
+    for (const row of data) {
+      const key = `${row.academicYear}__${row.semester}`;
+      const group = map.get(key) ?? {
+        academicYear: row.academicYear,
+        semester: row.semester,
+        rows: [],
+      };
+      group.rows.push(row);
+      map.set(key, group);
+    }
+    return [...map.values()];
+  }, [data]);
 
   return (
     <>
@@ -39,8 +210,13 @@ export default function StudentResultsPage() {
         subtitle="Your academic performance"
       />
       <main className="flex flex-1 flex-col gap-6 bg-muted/20 p-6">
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div>
           <div>
+            {data[0]?.className && (
+              <p className="mb-2 text-sm font-semibold text-muted-foreground">
+                Grade and section: {data[0].className}
+              </p>
+            )}
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
               Academic record
             </p>
@@ -48,64 +224,29 @@ export default function StudentResultsPage() {
               Results
             </h2>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Select
-              value={year}
-              onValueChange={(value) => setYear(value ?? "")}
-            >
-              <SelectTrigger className="w-full rounded-none sm:w-48">
-                <SelectValue placeholder="All years" />
-              </SelectTrigger>
-              <SelectContent>
-                {options.data?.years.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
-              value={semester}
-              onValueChange={(value) => setSemester(value ?? "")}
-            >
-              <SelectTrigger className="w-full rounded-none sm:w-40">
-                <SelectValue placeholder="All semesters" />
-              </SelectTrigger>
-              <SelectContent>
-                {options.data?.semesters
-                  .filter((item) => !year || item.academicYearId === year)
-                  .map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.name}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
         </div>
-        {results.isError ? (
+
+        {results.isError && (
           <Card className="rounded-none shadow-none">
             <CardContent className="flex flex-col items-center gap-3 p-6 text-sm text-destructive">
               <AlertTriangle className="size-5" />
               <p>Unable to load your results.</p>
-              <p className="max-w-2xl break-words text-center text-xs text-muted-foreground">
+              <p className="max-w-2xl wrap-break-word text-center text-xs text-muted-foreground">
                 {resultError}
               </p>
             </CardContent>
           </Card>
-        ) : results.isLoading ? (
-          <div className="grid gap-4 md:grid-cols-2">
-            {[1, 2, 3, 4].map((item) => (
-              <Card key={item} className="rounded-none shadow-none">
-                <CardContent className="space-y-3 p-5">
-                  <Skeleton className="h-5 w-40 rounded-none" />
-                  <Skeleton className="h-4 w-28 rounded-none" />
-                  <Skeleton className="h-12 w-full rounded-none" />
-                </CardContent>
-              </Card>
+        )}
+
+        {!results.isError && results.isLoading && (
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-20 w-full rounded-none" />
             ))}
           </div>
-        ) : results.data?.length === 0 ? (
+        )}
+
+        {!results.isError && !results.isLoading && data.length === 0 && (
           <Card className="rounded-none shadow-none">
             <CardContent className="flex flex-col items-center gap-2 p-12 text-center">
               <BookOpen className="size-8 text-muted-foreground" />
@@ -115,55 +256,19 @@ export default function StudentResultsPage() {
               </p>
             </CardContent>
           </Card>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {results.data?.map((result) => (
-              <Card key={result.id} className="rounded-none shadow-none">
-                <CardHeader className="border-b">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="font-semibold">{result.subject}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {result.className} · {result.semester} ·{" "}
-                        {result.academicYear}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-semibold">
-                        {result.score ?? "—"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        out of {result.maxScore}
-                      </p>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3 p-5">
-                  {result.components.map((component) => (
-                    <div
-                      key={component.name}
-                      className="flex items-center justify-between border-b pb-2 text-sm last:border-0"
-                    >
-                      <span>
-                        {component.name}
-                        <span className="ml-2 text-xs text-muted-foreground">
-                          {component.status}
-                        </span>
-                      </span>
-                      <span className="font-medium">
-                        {component.score ?? "—"} / {component.maxScore}
-                      </span>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
+        )}
+
+        {!results.isError && !results.isLoading && data.length > 0 && (
+          <div className="space-y-4">
+            {groups.map((group) => (
+              <SemesterSection
+                key={`${group.academicYear}__${group.semester}`}
+                academicYear={group.academicYear}
+                semester={group.semester}
+                rows={group.rows}
+              />
             ))}
           </div>
-        )}
-        {optionsError && (
-          <p className="text-xs text-muted-foreground">
-            Filter options unavailable: {optionsError}
-          </p>
         )}
       </main>
     </>

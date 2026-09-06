@@ -1,282 +1,127 @@
 // app/teacher/settings/page.tsx
 "use client";
 
-import { AlertTriangle, RefreshCw, Save } from "lucide-react";
-import { useState, useEffect } from "react";
+import { FormEvent, useState } from "react";
+import { LockKeyhole } from "lucide-react";
 import { SiteHeader } from "@/components/teacher/site-header";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardDescription,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  useCurrentTeacher,
-  useUpdateTeacherProfile,
-} from "@/hooks/use-teacher";
+import { useUpdatePassword } from "@/hooks/use-auth";
 
 export default function SettingsPage() {
-  const { data, isLoading, isError, error, refetch } = useCurrentTeacher();
-  const updateProfile = useUpdateTeacherProfile();
-  const [formData, setFormData] = useState({
-    fullName: "",
-    email: "",
-    phone: "",
-    bio: "",
-    department: "",
-    qualifications: "",
-  });
-  const [showNotification, setShowNotification] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
+  const updatePassword = useUpdatePassword();
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [message, setMessage] = useState("");
 
-  useEffect(() => {
-    if (data) {
-      setFormData({
-        fullName: data.full_name || "",
-        email: data.email || "",
-        phone: data.phone || "",
-        bio: data.bio || "",
-        department: data.department || "",
-        qualifications: data.qualifications || "",
-      });
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setMessage("");
+
+    if (!currentPassword) {
+      setMessage("Enter your current password.");
+      return;
     }
-  }, [data]);
+    if (password.length < 8) {
+      setMessage("Password must be at least 8 characters.");
+      return;
+    }
+    if (password !== confirm) {
+      setMessage("Passwords do not match.");
+      return;
+    }
 
-  const handleSave = async () => {
-    try {
-      await updateProfile.mutateAsync({
-        full_name: formData.fullName,
-        email: formData.email,
-        phone: formData.phone,
-        bio: formData.bio,
-        department: formData.department,
-        qualifications: formData.qualifications,
-      });
-      setShowNotification({
-        type: "success",
-        message: "Profile updated successfully!",
-      });
-      setTimeout(() => setShowNotification(null), 3000);
-    } catch (err) {
-      setShowNotification({
-        type: "error",
-        message:
-          err instanceof Error ? err.message : "Failed to update profile",
-      });
+    const result = await updatePassword.mutate({ currentPassword, password });
+    if (result) {
+      setCurrentPassword("");
+      setPassword("");
+      setConfirm("");
+      setMessage("Password updated successfully.");
     }
   };
-
-  if (isLoading) {
-    return (
-      <>
-        <SiteHeader title="Settings" />
-        <div className="flex flex-1 flex-col gap-6 p-6">
-          <div className="space-y-4">
-            <Skeleton className="h-6 w-32 rounded-none" />
-            <div className="space-y-3">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="space-y-2">
-                  <Skeleton className="h-4 w-20 rounded-none" />
-                  <Skeleton className="h-10 w-full rounded-none" />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  if (isError) {
-    return (
-      <>
-        <SiteHeader title="Settings" />
-        <div className="flex flex-1 items-center justify-center p-6">
-          <Card className="w-full max-w-lg rounded-none border-border shadow-none">
-            <CardContent className="flex flex-col items-center gap-4 p-8 text-center">
-              <div className="flex size-12 items-center justify-center bg-destructive/10 text-destructive">
-                <AlertTriangle className="size-5" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-lg font-semibold text-foreground">
-                  Could not load settings
-                </p>
-                <p className="text-sm leading-6 text-muted-foreground">
-                  {error instanceof Error
-                    ? error.message
-                    : "Something went wrong. Please try again."}
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => refetch()}
-                className="rounded-none"
-              >
-                <RefreshCw className="size-4" />
-                Try again
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </>
-    );
-  }
-
-  if (!data) return null;
 
   return (
     <>
       <SiteHeader title="Settings" />
-
-      {showNotification && (
-        <div
-          className={`fixed top-4 right-4 px-4 py-3 rounded-lg shadow-lg text-white z-50 animate-in fade-in slide-in-from-top-2 duration-300 ${
-            showNotification.type === "success" ? "bg-green-500" : "bg-red-500"
-          }`}
-        >
-          {showNotification.message}
-        </div>
-      )}
-
-      <div className="flex flex-1 flex-col gap-6 p-6 max-w-2xl">
-        <div>
-          <h2 className="text-lg font-semibold">Profile Settings</h2>
-          <p className="text-sm text-muted-foreground">
-            Manage your teacher profile information
-          </p>
-        </div>
-
-        <Card className="rounded-none shadow-none">
+      <main className="flex flex-1 bg-muted/20 p-6">
+        <Card className="h-fit w-full max-w-xl rounded-none shadow-none">
           <CardHeader className="border-b">
-            <h3 className="text-sm font-semibold">Basic Information</h3>
-            <CardDescription className="text-xs">
-              Your personal details
-            </CardDescription>
+            <div className="flex items-center gap-3">
+              <div className="flex size-9 items-center justify-center bg-primary/10 text-primary">
+                <LockKeyhole className="size-4" />
+              </div>
+              <div>
+                <p className="font-semibold">Change password</p>
+                <p className="text-sm text-muted-foreground">
+                  Your username and account identity cannot be changed here.
+                </p>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-6 p-6">
-            <div className="space-y-2">
-              <Label htmlFor="fullName" className="text-sm font-medium">
-                Full Name
-              </Label>
-              <Input
-                id="fullName"
-                value={formData.fullName}
-                onChange={(e) =>
-                  setFormData({ ...formData, fullName: e.target.value })
-                }
-                className="rounded-none"
-                disabled
-              />
-              <p className="text-xs text-muted-foreground">
-                Contact your administrator to change your name
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium">
-                Email
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.email}
-                onChange={(e) =>
-                  setFormData({ ...formData, email: e.target.value })
-                }
-                className="rounded-none"
-                disabled
-              />
-              <p className="text-xs text-muted-foreground">
-                Contact your administrator to change your email
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="phone" className="text-sm font-medium">
-                Phone Number
-              </Label>
-              <Input
-                id="phone"
-                type="tel"
-                value={formData.phone}
-                onChange={(e) =>
-                  setFormData({ ...formData, phone: e.target.value })
-                }
-                placeholder="+251 912 345 678"
-                className="rounded-none"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="department" className="text-sm font-medium">
-                Department
-              </Label>
-              <Input
-                id="department"
-                value={formData.department}
-                onChange={(e) =>
-                  setFormData({ ...formData, department: e.target.value })
-                }
-                placeholder="e.g., Science, Mathematics"
-                className="rounded-none"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="qualifications" className="text-sm font-medium">
-                Qualifications
-              </Label>
-              <Input
-                id="qualifications"
-                value={formData.qualifications}
-                onChange={(e) =>
-                  setFormData({ ...formData, qualifications: e.target.value })
-                }
-                placeholder="e.g., B.Sc. in Physics, M.Ed."
-                className="rounded-none"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="bio" className="text-sm font-medium">
-                Bio
-              </Label>
-              <Textarea
-                id="bio"
-                value={formData.bio}
-                onChange={(e) =>
-                  setFormData({ ...formData, bio: e.target.value })
-                }
-                placeholder="Tell students a bit about yourself..."
-                className="rounded-none min-h-24"
-              />
-            </div>
-
-            <Button
-              onClick={handleSave}
-              disabled={updateProfile.isPending}
-              className="rounded-none w-full sm:w-auto"
-            >
-              {updateProfile.isPending ? (
-                <>Saving...</>
-              ) : (
-                <>
-                  <Save className="size-4" />
-                  Save Changes
-                </>
+          <CardContent>
+            <form onSubmit={submit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="current-password">Current password</Label>
+                <Input
+                  id="current-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={currentPassword}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                  required
+                  className="rounded-none"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new-password">New password</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                  className="rounded-none"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">Confirm password</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirm}
+                  onChange={(event) => setConfirm(event.target.value)}
+                  required
+                  className="rounded-none"
+                />
+              </div>
+              {message && (
+                <p
+                  className={`text-sm ${message.includes("successfully") ? "text-emerald-700" : "text-destructive"}`}
+                >
+                  {message}
+                </p>
               )}
-            </Button>
+              {updatePassword.error && (
+                <p className="text-sm text-destructive">
+                  {updatePassword.error.message}
+                </p>
+              )}
+              <Button
+                type="submit"
+                disabled={updatePassword.isLoading}
+                className="rounded-none"
+              >
+                {updatePassword.isLoading ? "Updating..." : "Update password"}
+              </Button>
+            </form>
           </CardContent>
         </Card>
-      </div>
+      </main>
     </>
   );
 }

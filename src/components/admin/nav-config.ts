@@ -34,6 +34,7 @@ export const adminNavMain: NavItem[] = [
   },
   { title: "Ranking", url: "/admin/rankings", icon: Trophy },
   { title: "Payments", url: "/admin/payments", icon: CreditCard },
+  { title: "Payment Options", url: "/admin/payment-options", icon: CreditCard },
 ];
 
 export const adminNavFooter: NavItem[] = [

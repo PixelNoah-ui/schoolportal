@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, AlertTriangle, Search, X } from "lucide-react";
@@ -32,6 +32,9 @@ import { useClassRoster } from "@/hooks/use-class-roster";
 import { useGradingStructure } from "@/hooks/use-grading-structure";
 import { GradingStructureEditor } from "@/components/teacher/grading-structure-editor";
 import { createClient } from "@/utils/supabase/client";
+import PaginationBar from "@/components/PaginationBar";
+
+const rosterPageSize = 8;
 
 function initials(name: string) {
   return name
@@ -60,6 +63,7 @@ export default function ClassRosterPage() {
   const classSubjectId = params.id as string;
   const [semesterId, setSemesterId] = useState("sem-1");
   const [search, setSearch] = useState("");
+  const searchParams = useSearchParams();
   const toastManager = useToastManager();
   const supabase = createClient();
 
@@ -117,6 +121,21 @@ export default function ClassRosterPage() {
         s.studentNumber.toLowerCase().includes(term),
     );
   }, [data, search]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredStudents.length / rosterPageSize),
+  );
+  const requestedPage = Math.max(1, Number(searchParams.get("page") ?? "1"));
+  const currentPage = Math.min(requestedPage, totalPages);
+  const paginatedStudents = useMemo(
+    () =>
+      filteredStudents.slice(
+        (currentPage - 1) * rosterPageSize,
+        currentPage * rosterPageSize,
+      ),
+    [currentPage, filteredStudents],
+  );
 
   const stats = useMemo(() => {
     if (!data) return null;
@@ -259,7 +278,12 @@ export default function ClassRosterPage() {
             <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
             <Input
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                const next = new URLSearchParams(searchParams);
+                next.delete("page");
+                router.replace(`?${next.toString()}`);
+              }}
               placeholder="Search students"
               className="rounded-none pl-8 pr-8"
             />
@@ -307,24 +331,24 @@ export default function ClassRosterPage() {
                 No students match your search
               </p>
               <p className="text-sm text-muted-foreground">
-                Try a different name or ID.
+                Try a different name or username.
               </p>
             </CardContent>
           </Card>
         ) : (
-          <Card className="rounded-none shadow-none">
-            <CardContent className="p-0">
+          <div className="flex flex-col gap-4">
+            <div className="overflow-hidden border">
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
                     <TableHead>Student</TableHead>
-                    <TableHead>ID</TableHead>
+                    <TableHead>Username</TableHead>
                     <TableHead>Score</TableHead>
                     <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredStudents.map((student) => {
+                  {paginatedStudents.map((student) => {
                     const tone =
                       student.normalizedScore != null
                         ? scoreTone(student.normalizedScore)
@@ -396,8 +420,9 @@ export default function ClassRosterPage() {
                   })}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+            </div>
+            <PaginationBar totalPage={totalPages} currentPage={currentPage} />
+          </div>
         )}
       </div>
     </>

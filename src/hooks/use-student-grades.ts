@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/utils/supabase/client";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type GradeStatus =
   | "graded"
@@ -32,6 +33,86 @@ export interface StudentHeader {
   subjectName: string;
 }
 
+type ClassSubjectDetails = {
+  classes?: {
+    section?: string | null;
+    grade_levels?: { level_number: number } | { level_number: number }[] | null;
+  };
+  subjects?: { name: string };
+};
+
+type StudentDetails = {
+  profiles?: { full_name: string } | { full_name: string }[] | null;
+};
+
+function firstRelation<T>(value: T | T[] | null | undefined) {
+  return Array.isArray(value) ? value[0] : (value ?? undefined);
+}
+
+// Shared by both the read and write paths: a class/subject pairing has one
+// class_subjects row per semester, so if the caller passes a placeholder
+// semesterId (e.g. a UI-only "sem-..." value rather than a real DB id), this
+// resolves the actual row for the requested semester instead of assuming
+// classSubjectId is already semester-correct.
+async function resolveActiveClassSubject(
+  supabase: SupabaseClient,
+  classSubjectId: string,
+  semesterId: string,
+) {
+  const { data: classSubject, error: classSubjectError } = await supabase
+    .from("class_subjects")
+    .select("class_id, subject_id, semester_id")
+    .eq("id", classSubjectId)
+    .single();
+  if (classSubjectError) throw classSubjectError;
+
+  const { data: semesterClassSubject, error: semesterClassSubjectError } =
+    await supabase
+      .from("class_subjects")
+      .select("id, semester_id")
+      .eq("class_id", classSubject.class_id)
+      .eq("subject_id", classSubject.subject_id)
+      .eq(
+        "semester_id",
+        semesterId.startsWith("sem-") ? classSubject.semester_id : semesterId,
+      )
+      .maybeSingle();
+  if (semesterClassSubjectError) throw semesterClassSubjectError;
+
+  return {
+    classSubject,
+    activeClassSubjectId: semesterClassSubject?.id ?? classSubjectId,
+    activeSemesterId:
+      semesterClassSubject?.semester_id ?? classSubject.semester_id,
+  };
+}
+
+// NOTE: "excused" and "not_taken" currently share no distinct DB value —
+// see conversation notes. This maps "excused" to 'draft' with the same
+// caveat as "not_taken" until the submission_status enum (or a new column)
+// can represent it distinctly.
+function toDbStatus(status: GradeStatus): string {
+  switch (status) {
+    case "graded":
+      return "submitted";
+    case "exempt":
+      return "approved";
+    case "absent":
+      return "rejected";
+    case "excused":
+    case "not_taken":
+    default:
+      return "draft";
+  }
+}
+
+function displayStatus(status?: string): GradeStatus {
+  if (status === "submitted") return "graded";
+  if (status === "approved") return "exempt";
+  if (status === "rejected") return "absent";
+  return "not_taken";
+}
+
 export function useStudentGrades(
   classSubjectId: string,
   semesterId: string,
@@ -48,7 +129,10 @@ export function useStudentGrades(
       header: StudentHeader;
       grades: StudentComponentGrade[];
     }> => {
-      const { data: classSubject, error: csError } = await supabase
+      const { classSubject, activeClassSubjectId, activeSemesterId } =
+        await resolveActiveClassSubject(supabase, classSubjectId, semesterId);
+
+      const { data: fullClassSubject, error: csError } = await supabase
         .from("class_subjects")
         .select(
           "class_id, subject_id, semester_id, classes ( section, grade_levels!classes_grade_level_id_fkey(level_number) ), subjects ( name )",
@@ -57,30 +141,19 @@ export function useStudentGrades(
         .single();
       if (csError) throw csError;
 
-      const { data: semesterClassSubject, error: semesterClassSubjectError } =
-        await supabase
-          .from("class_subjects")
-          .select("id, semester_id")
-          .eq("class_id", classSubject.class_id)
-          .eq("subject_id", classSubject.subject_id)
-          .eq(
-            "semester_id",
-            semesterId.startsWith("sem-")
-              ? classSubject.semester_id
-              : semesterId,
-          )
-          .maybeSingle();
-      if (semesterClassSubjectError) throw semesterClassSubjectError;
-      const activeClassSubjectId = semesterClassSubject?.id ?? classSubjectId;
-      const activeSemesterId =
-        semesterClassSubject?.semester_id ?? classSubject.semester_id;
-
       const { data: student, error: studentError } = await supabase
         .from("students")
         .select("profiles:profile_id ( full_name )")
         .eq("id", studentId)
         .single();
       if (studentError) throw studentError;
+
+      const classSubjectDetails =
+        fullClassSubject as unknown as ClassSubjectDetails;
+      const studentDetails = student as unknown as StudentDetails;
+      const classRow = classSubjectDetails.classes;
+      const gradeLevel = firstRelation(classRow?.grade_levels);
+      const studentProfile = firstRelation(studentDetails.profiles);
 
       const { data: components, error: componentsError } = await supabase
         .from("course_assessments")
@@ -104,19 +177,12 @@ export function useStudentGrades(
         (results ?? []).map((r) => [r.course_assessment_id, r]),
       );
 
-      const displayStatus = (status?: string): GradeStatus => {
-        if (status === "submitted") return "graded";
-        if (status === "approved") return "exempt";
-        if (status === "rejected") return "absent";
-        return "not_taken";
-      };
-
       return {
         header: {
           studentId,
-          fullName: (student as any).profiles?.full_name ?? "Unnamed student",
-          className: `${(classSubject as any).classes?.grade_levels?.level_number ?? ""}${(classSubject as any).classes?.section ?? ""}`,
-          subjectName: (classSubject as any).subjects?.name ?? "",
+          fullName: studentProfile?.full_name ?? "Unnamed student",
+          className: `${gradeLevel?.level_number ?? ""}${classRow?.section ?? ""}`,
+          subjectName: classSubjectDetails.subjects?.name ?? "",
         },
         grades: (components ?? []).map((c) => {
           const result = resultByComponent.get(c.id);
@@ -134,30 +200,8 @@ export function useStudentGrades(
 
   const submitGrades = useMutation({
     mutationFn: async (grades: StudentGradeDraft[]) => {
-      const { data: classSubject, error: classSubjectError } = await supabase
-        .from("class_subjects")
-        .select("class_id, subject_id, semester_id")
-        .eq("id", classSubjectId)
-        .single();
-      if (classSubjectError) throw classSubjectError;
-
-      const { data: semesterClassSubject, error: semesterClassSubjectError } =
-        await supabase
-          .from("class_subjects")
-          .select("id, semester_id")
-          .eq("class_id", classSubject.class_id)
-          .eq("subject_id", classSubject.subject_id)
-          .eq(
-            "semester_id",
-            semesterId.startsWith("sem-")
-              ? classSubject.semester_id
-              : semesterId,
-          )
-          .maybeSingle();
-      if (semesterClassSubjectError) throw semesterClassSubjectError;
-      const activeClassSubjectId = semesterClassSubject?.id ?? classSubjectId;
-      const activeSemesterId =
-        semesterClassSubject?.semester_id ?? classSubject.semester_id;
+      const { activeClassSubjectId, activeSemesterId } =
+        await resolveActiveClassSubject(supabase, classSubjectId, semesterId);
 
       const { data: assessments, error: assessmentsError } = await supabase
         .from("course_assessments")
@@ -169,6 +213,7 @@ export function useStudentGrades(
       const assessmentById = new Map(
         (assessments ?? []).map((assessment) => [assessment.id, assessment]),
       );
+
       for (const grade of grades) {
         if (grade.status !== "graded" || grade.score == null) continue;
         const assessment = assessmentById.get(grade.courseAssessmentId);
@@ -187,16 +232,7 @@ export function useStudentGrades(
             student_id: studentId,
             course_assessment_id: grade.courseAssessmentId,
             score: grade.status === "graded" ? grade.score : null,
-            // The database uses draft/submitted states; the UI keeps the
-            // teacher-facing statuses and submits the complete set together.
-            status:
-              grade.status === "graded"
-                ? "submitted"
-                : grade.status === "exempt"
-                  ? "approved"
-                  : grade.status === "absent"
-                    ? "rejected"
-                    : "draft",
+            status: toDbStatus(grade.status),
           })),
           { onConflict: "student_id,course_assessment_id" },
         );

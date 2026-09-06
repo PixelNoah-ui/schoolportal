@@ -1,8 +1,6 @@
 // components/teacher/site-header.tsx
-import { Bell } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
-import { Button } from "@/components/ui/button";
 
 export function SiteHeader({
   title,
@@ -20,12 +18,6 @@ export function SiteHeader({
         {subtitle ? (
           <span className="text-xs text-muted-foreground">{subtitle}</span>
         ) : null}
-      </div>
-
-      <div className="ml-auto flex items-center gap-3">
-        <Button variant="outline" size="icon" className="rounded-none">
-          <Bell className="size-4" />
-        </Button>
       </div>
     </header>
   );

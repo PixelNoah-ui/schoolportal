@@ -1,7 +1,5 @@
-import { Bell } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
-import { Button } from "@/components/ui/button";
 
 export function StudentSiteHeader({
   title,
@@ -20,14 +18,6 @@ export function StudentSiteHeader({
           <p className="text-xs text-muted-foreground">{subtitle}</p>
         )}
       </div>
-      <Button
-        variant="outline"
-        size="icon"
-        className="ml-auto rounded-none"
-        aria-label="Notifications"
-      >
-        <Bell className="size-4" />
-      </Button>
     </header>
   );
 }

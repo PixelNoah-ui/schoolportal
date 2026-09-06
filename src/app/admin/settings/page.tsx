@@ -1,251 +1,270 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, School } from "lucide-react";
+import { FormEvent, useEffect, useState } from "react";
+import { LockKeyhole, Save, UserRound } from "lucide-react";
 import { SiteHeader } from "@/components/admin/site-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  useAcademicYears,
-  useCreateAcademicYear,
-  useActivateAcademicYear,
-  useCompleteAcademicYear,
-} from "@/hooks/use-academic-years";
+import { useUpdatePassword } from "@/hooks/use-auth";
+import { createClient } from "@/utils/supabase/client";
+
+const supabase = createClient();
 
 export default function SettingsPage() {
-  const { data, isLoading } = useAcademicYears();
-  const createAcademicYear = useCreateAcademicYear();
-  const activateAcademicYear = useActivateAcademicYear();
-  const completeAcademicYear = useCompleteAcademicYear();
-  const [name, setName] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [semesters, setSemesters] = useState("Semester 1,Semester 2");
+  const updatePassword = useUpdatePassword();
+  const [profileId, setProfileId] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [message, setMessage] = useState("");
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState("");
 
-  const academicYears = data ?? [];
-  const currentYear =
-    academicYears.find((year) => year.isCurrent) ?? academicYears[0];
+  useEffect(() => {
+    async function loadProfile() {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-  function handleCreateYear() {
-    if (!name.trim()) return;
-    createAcademicYear.mutate({
-      name,
-      start_date: startDate,
-      end_date: endDate,
-      is_current: currentYear ? "false" : "true",
-      semesters: JSON.stringify(
-        semesters
-          .split(",")
-          .map((semester) => semester.trim())
-          .filter(Boolean)
-          .map((semesterName) => ({ name: semesterName })),
-      ),
-    });
-    setName("");
-    setStartDate("");
-    setEndDate("");
-    setSemesters("Semester 1,Semester 2");
+      if (userError || !user) {
+        setProfileError("Could not load your account.");
+        setProfileLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, username, email")
+        .eq("id", user.id)
+        .single();
+
+      if (error || !data) {
+        setProfileError("Could not load your account.");
+      } else {
+        setProfileId(data.id);
+        setFullName(data.full_name);
+        setUsername(data.username);
+        setEmail(data.email || user.email || "");
+      }
+      setProfileLoading(false);
+    }
+
+    void loadProfile();
+  }, [supabase]);
+
+  async function saveProfile(event: FormEvent) {
+    event.preventDefault();
+    setProfileError("");
+    setMessage("");
+    setProfileSaving(true);
+
+    const { data: authData } = await supabase.auth.getUser();
+    const currentEmail = authData.user?.email ?? "";
+    const { error: profileUpdateError } = await supabase
+      .from("profiles")
+      .update({
+        full_name: fullName.trim(),
+        username: username.trim(),
+        email: email.trim(),
+      })
+      .eq("id", profileId);
+
+    if (profileUpdateError) {
+      setProfileError(profileUpdateError.message);
+      setProfileSaving(false);
+      return;
+    }
+
+    if (email.trim() !== currentEmail) {
+      const { error: authUpdateError } = await supabase.auth.updateUser({
+        email: email.trim(),
+      });
+      if (authUpdateError) {
+        setProfileError(authUpdateError.message);
+        setProfileSaving(false);
+        return;
+      }
+      setMessage(
+        "Account details saved. Check the new email for confirmation.",
+      );
+    } else {
+      setMessage("Account details saved.");
+    }
+    setProfileSaving(false);
+  }
+
+  async function changePassword(event: FormEvent) {
+    event.preventDefault();
+    setMessage("");
+    if (!currentPassword) {
+      setMessage("Enter your current password.");
+      return;
+    }
+    if (password.length < 8) {
+      setMessage("Password must be at least 8 characters.");
+      return;
+    }
+    if (password !== confirm) {
+      setMessage("Passwords do not match.");
+      return;
+    }
+
+    const result = await updatePassword.mutate({ currentPassword, password });
+    if (result) {
+      setCurrentPassword("");
+      setPassword("");
+      setConfirm("");
+      setMessage("Password updated successfully.");
+    }
   }
 
   return (
     <>
       <SiteHeader title="Settings" />
-      <div className="flex flex-1 flex-col gap-5 p-6">
-        <Card className="rounded-none shadow-none">
-          <CardHeader className="border-b pb-4">
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Academic Years
-            </span>
+      <main className="flex flex-1 flex-col gap-6 bg-muted/20 p-6">
+        <Card className="h-fit w-full max-w-2xl rounded-none shadow-none">
+          <CardHeader className="border-b">
+            <div className="flex items-center gap-3">
+              <div className="flex size-9 items-center justify-center bg-primary/10 text-primary">
+                <UserRound className="size-4" />
+              </div>
+              <div>
+                <p className="font-semibold">Account details</p>
+                <p className="text-sm text-muted-foreground">
+                  Update your administrator account information.
+                </p>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent className="grid gap-4 pt-6 lg:grid-cols-[1.1fr_0.9fr]">
-            <div className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="year-name">Academic year</Label>
-                  <Input
-                    id="year-name"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    placeholder="2026/2027"
-                    className="rounded-none"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="year-status">Current status</Label>
-                  <Input
-                    id="year-status"
-                    value={currentYear ? currentYear.name : "No active year"}
-                    disabled
-                    className="rounded-none bg-muted/40"
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="year-start">Start date</Label>
-                  <Input
-                    id="year-start"
-                    type="date"
-                    value={startDate}
-                    onChange={(event) => setStartDate(event.target.value)}
-                    className="rounded-none"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="year-end">End date</Label>
-                  <Input
-                    id="year-end"
-                    type="date"
-                    value={endDate}
-                    onChange={(event) => setEndDate(event.target.value)}
-                    className="rounded-none"
-                  />
-                </div>
-              </div>
-
+          <CardContent>
+            <form onSubmit={saveProfile} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="year-semesters">Semesters</Label>
+                <Label htmlFor="full-name">Full name</Label>
                 <Input
-                  id="year-semesters"
-                  value={semesters}
-                  onChange={(event) => setSemesters(event.target.value)}
-                  placeholder="Semester 1, Semester 2"
+                  id="full-name"
+                  value={fullName}
+                  onChange={(event) => setFullName(event.target.value)}
+                  required
+                  className="rounded-none"
+                  disabled={profileLoading}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="username">Username</Label>
+                <Input
+                  id="username"
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  required
+                  className="rounded-none"
+                  disabled={profileLoading}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  required
+                  className="rounded-none"
+                  disabled={profileLoading}
+                />
+              </div>
+              {profileError && (
+                <p className="text-sm text-destructive">{profileError}</p>
+              )}
+              <Button
+                type="submit"
+                disabled={profileLoading || profileSaving}
+                className="rounded-none"
+              >
+                <Save className="size-4" />
+                {profileSaving ? "Saving..." : "Save account details"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card className="h-fit w-full max-w-2xl rounded-none shadow-none">
+          <CardHeader className="border-b">
+            <div className="flex items-center gap-3">
+              <div className="flex size-9 items-center justify-center bg-primary/10 text-primary">
+                <LockKeyhole className="size-4" />
+              </div>
+              <div>
+                <p className="font-semibold">Change password</p>
+                <p className="text-sm text-muted-foreground">
+                  Confirm your current password before changing it.
+                </p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={changePassword} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="current-password">Current password</Label>
+                <Input
+                  id="current-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={currentPassword}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                  required
                   className="rounded-none"
                 />
               </div>
-
-              <div className="flex justify-end">
-                <Button
+              <div className="space-y-2">
+                <Label htmlFor="new-password">New password</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
                   className="rounded-none"
-                  onClick={handleCreateYear}
-                  disabled={createAcademicYear.isPending || !name.trim()}
-                >
-                  <Plus className="size-4" />
-                  Create academic year
-                </Button>
+                />
               </div>
-            </div>
-
-            <div className="space-y-3">
-              {isLoading ? (
-                <div className="text-sm text-muted-foreground">
-                  Loading academic years...
-                </div>
-              ) : academicYears.length === 0 ? (
-                <div className="rounded-none border border-dashed p-4 text-sm text-muted-foreground">
-                  No academic years created yet.
-                </div>
-              ) : (
-                academicYears.map((year) => (
-                  <div key={year.id} className="rounded-none border p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-medium">{year.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {year.semesters.length} semester(s)
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {year.isCurrent && (
-                          <Badge className="rounded-none">Active</Badge>
-                        )}
-                        {year.status === "completed" && (
-                          <Badge variant="secondary" className="rounded-none">
-                            Completed
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {year.semesters.map((semester) => (
-                        <Badge
-                          key={semester.id}
-                          variant="outline"
-                          className="rounded-none"
-                        >
-                          {semester.name}
-                        </Badge>
-                      ))}
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {!year.isCurrent && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="rounded-none"
-                          onClick={() => activateAcademicYear.mutate(year.id)}
-                        >
-                          Activate
-                        </Button>
-                      )}
-                      {year.isCurrent && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="rounded-none"
-                          onClick={() => completeAcademicYear.mutate(year.id)}
-                        >
-                          Complete
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">Confirm password</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirm}
+                  onChange={(event) => setConfirm(event.target.value)}
+                  required
+                  className="rounded-none"
+                />
+              </div>
+              {message && (
+                <p className="text-sm text-muted-foreground">{message}</p>
               )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-none shadow-none">
-          <CardHeader className="border-b pb-4">
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              School Profile
-            </span>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 gap-5 pt-6 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>School Name</Label>
-              <Input defaultValue="PixelNoah School" className="rounded-none" />
-            </div>
-            <div className="space-y-2">
-              <Label>Principal</Label>
-              <Input defaultValue="School Principal" className="rounded-none" />
-            </div>
-            <div className="space-y-2">
-              <Label>Email</Label>
-              <Input
-                defaultValue="admin@schoolportal.com"
+              {updatePassword.error && (
+                <p className="text-sm text-destructive">
+                  {updatePassword.error.message}
+                </p>
+              )}
+              <Button
+                type="submit"
+                disabled={updatePassword.isLoading}
                 className="rounded-none"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Phone</Label>
-              <Input defaultValue="+251 911 000 000" className="rounded-none" />
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label>Address</Label>
-              <Input defaultValue="Addis Ababa" className="rounded-none" />
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label>Website</Label>
-              <Input defaultValue="schoolportal.edu" className="rounded-none" />
-            </div>
+              >
+                {updatePassword.isLoading ? "Updating..." : "Update password"}
+              </Button>
+            </form>
           </CardContent>
         </Card>
-
-        <div className="flex justify-end">
-          <Button className="rounded-none">
-            <School className="size-4" />
-            Save changes
-          </Button>
-        </div>
-      </div>
+      </main>
     </>
   );
 }

@@ -30,6 +30,90 @@ export type StudentPayment = {
   note: string | null;
 };
 
+export type PaymentOption = {
+  id: string;
+  name: string;
+  paymentMethod: string;
+  accountName: string | null;
+  accountNumber: string | null;
+  phoneNumber: string | null;
+  instructions: string | null;
+  iconUrl: string | null;
+};
+
+type StudentGradeQueryRow = {
+  score: number | null;
+  status: string;
+  class_subject_id: string;
+  semester_id: string;
+  class_subjects:
+    | {
+        id: string;
+        subjects: { name: string } | { name: string }[] | null;
+        classes:
+          | {
+              name: string;
+              section: string | null;
+              grade_levels:
+                | { level_number: number }
+                | { level_number: number }[]
+                | null;
+            }
+          | {
+              name: string;
+              section: string | null;
+              grade_levels:
+                | { level_number: number }
+                | { level_number: number }[]
+                | null;
+            }[];
+      }
+    | {
+        id: string;
+        subjects: { name: string } | { name: string }[] | null;
+        classes:
+          | {
+              name: string;
+              section: string | null;
+              grade_levels:
+                | { level_number: number }
+                | { level_number: number }[]
+                | null;
+            }
+          | {
+              name: string;
+              section: string | null;
+              grade_levels:
+                | { level_number: number }
+                | { level_number: number }[]
+                | null;
+            }[];
+      }[];
+  semesters:
+    | {
+        id: string;
+        name: string;
+        academic_year_id: string;
+        academic_years:
+          | { id: string; name: string }
+          | { id: string; name: string }[];
+      }
+    | {
+        id: string;
+        name: string;
+        academic_year_id: string;
+        academic_years:
+          | { id: string; name: string }
+          | { id: string; name: string }[];
+      }[];
+};
+
+type StudentSemesterQueryRow = Pick<StudentGradeQueryRow, "semesters">;
+
+function firstRelation<T>(value: T | T[] | null | undefined) {
+  return Array.isArray(value) ? value[0] : (value ?? undefined);
+}
+
 async function getStudentId(supabase: ReturnType<typeof createClient>) {
   const {
     data: { user },
@@ -57,62 +141,142 @@ export async function fetchStudentResults(
   const supabase = createClient();
   const studentId = await getStudentId(supabase);
   let request = supabase
-    .from("assessment_results")
-    .select(
-      "score, status, course_assessments!inner(id, name, max_score, semester_id, semesters!inner(id, name, academic_year_id, academic_years!inner(id, name)), class_subjects!inner(subjects!inner(name), classes!inner(name, grade, section)))",
-    )
-    .eq("student_id", studentId);
+    .from("grades")
+    .select("score, status, class_subject_id, semester_id")
+    .eq("student_id", studentId)
+    .not("score", "is", null);
   if (filters.semesterId)
-    request = request.eq("course_assessments.semester_id", filters.semesterId);
-  if (filters.academicYearId)
-    request = request.eq(
-      "course_assessments.semesters.academic_year_id",
-      filters.academicYearId,
-    );
+    request = request.eq("semester_id", filters.semesterId);
   const { data, error } = await request;
   if (error) throw new Error(error.message);
 
+  const gradeRows = (data ?? []) as {
+    score: number;
+    status: string;
+    class_subject_id: string;
+    semester_id: string;
+    component_name?: string;
+    max_score?: number;
+  }[];
+  const { data: assessmentResultRows, error: assessmentResultsError } =
+    await supabase
+      .from("assessment_results")
+      .select("score, status, course_assessment_id")
+      .eq("student_id", studentId)
+      .not("score", "is", null);
+  if (assessmentResultsError) throw new Error(assessmentResultsError.message);
+
+  const assessmentIds = (assessmentResultRows ?? []).map(
+    (row) => row.course_assessment_id,
+  );
+  const { data: assessmentRows, error: assessmentsError } = assessmentIds.length
+    ? await supabase
+        .from("course_assessments")
+        .select("id, name, max_score, class_subject_id, semester_id")
+        .in("id", assessmentIds)
+    : { data: [], error: null };
+  if (assessmentsError) throw new Error(assessmentsError.message);
+  const assessmentById = new Map(
+    (assessmentRows ?? []).map((assessment) => [assessment.id, assessment]),
+  );
+  const assessmentGradeRows = (assessmentResultRows ?? []).flatMap((row) => {
+    const assessment = assessmentById.get(row.course_assessment_id);
+    return assessment
+      ? [
+          {
+            score: Number(row.score),
+            status: row.status,
+            class_subject_id: assessment.class_subject_id,
+            semester_id: assessment.semester_id,
+            component_name: assessment.name,
+            max_score: Number(assessment.max_score),
+          },
+        ]
+      : [];
+  });
+  const gradeKeys = new Set(
+    gradeRows.map((row) => `${row.class_subject_id}:${row.semester_id}`),
+  );
+  const allGradeRows = [
+    ...gradeRows,
+    ...assessmentGradeRows.filter(
+      (row) => !gradeKeys.has(`${row.class_subject_id}:${row.semester_id}`),
+    ),
+  ];
+  const semesterIds = [...new Set(allGradeRows.map((row) => row.semester_id))];
+  const classSubjectIds = [
+    ...new Set(allGradeRows.map((row) => row.class_subject_id)),
+  ];
+  const [{ data: semesters }, { data: classSubjects }] = await Promise.all([
+    semesterIds.length
+      ? supabase
+          .from("semesters")
+          .select("id, name, academic_year_id, academic_years!inner(id, name)")
+          .in("id", semesterIds)
+      : Promise.resolve({ data: [], error: null }),
+    classSubjectIds.length
+      ? supabase
+          .from("class_subjects")
+          .select(
+            "id, subjects(name), classes(name, section, grade_levels!classes_grade_level_id_fkey(level_number))",
+          )
+          .in("id", classSubjectIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  const semesterById = new Map(
+    (semesters ?? []).map((semester) => [semester.id, semester]),
+  );
+  const classSubjectById = new Map(
+    (classSubjects ?? []).map((classSubject) => [
+      classSubject.id,
+      classSubject,
+    ]),
+  );
+
   const groups = new Map<string, StudentResult>();
-  for (const row of (data ?? []) as any[]) {
-    const assessment = Array.isArray(row.course_assessments)
-      ? row.course_assessments[0]
-      : row.course_assessments;
-    const semester = Array.isArray(assessment?.semesters)
-      ? assessment.semesters[0]
-      : assessment?.semesters;
-    const subject = Array.isArray(assessment?.class_subjects?.subjects)
-      ? assessment.class_subjects.subjects[0]
-      : assessment?.class_subjects?.subjects;
-    const classRow = Array.isArray(assessment?.class_subjects?.classes)
-      ? assessment.class_subjects.classes[0]
-      : assessment?.class_subjects?.classes;
-    if (!assessment || !semester) continue;
-    const key = `${semester.id}:${assessment.class_subjects?.id ?? subject?.name}`;
+  for (const row of allGradeRows) {
+    const classSubject = classSubjectById.get(row.class_subject_id) as
+      | StudentGradeQueryRow["class_subjects"]
+      | undefined;
+    const semester = semesterById.get(row.semester_id) as
+      | StudentGradeQueryRow["semesters"]
+      | undefined;
+    const subject = firstRelation(classSubject?.subjects);
+    const classRow = firstRelation(classSubject?.classes);
+    const gradeLevel = firstRelation(classRow?.grade_levels);
+    if (!semester) continue;
+    const academicYear = firstRelation(semester.academic_years);
+    if (
+      filters.academicYearId &&
+      semester.academic_year_id !== filters.academicYearId
+    )
+      continue;
+    const key = `${semester.id}:${row.class_subject_id}`;
     const result = groups.get(key) ?? {
       id: key,
       subject: subject?.name ?? "Subject",
       className: classRow
-        ? `${classRow.grade}${classRow.section ?? ""}`
+        ? `${gradeLevel?.level_number ?? ""}${classRow.section ?? ""}`
         : "Class",
       semester: semester.name,
       academicYearId: semester.academic_year_id,
-      academicYear: semester.academic_years?.name ?? "Academic year",
+      academicYear: academicYear?.name ?? "Academic year",
       score: 0,
       maxScore: 0,
       completed: 0,
       total: 0,
       components: [],
     };
-    const score = row.score == null ? null : Number(row.score);
-    result.score =
-      result.score == null || score == null ? null : result.score + score;
-    result.maxScore += Number(assessment.max_score);
+    const score = Number(row.score);
+    result.score = (result.score ?? 0) + score;
+    result.maxScore += row.max_score ?? 100;
     result.total += 1;
-    if (row.status === "graded") result.completed += 1;
+    if (row.status === "submitted" || row.status === "active")
+      result.completed += 1;
     result.components.push({
-      name: assessment.name,
+      name: row.component_name ?? "Grade",
       score,
-      maxScore: Number(assessment.max_score),
+      maxScore: row.max_score ?? 100,
       status: row.status,
     });
     groups.set(key, result);
@@ -127,23 +291,20 @@ export async function fetchStudentFilterOptions() {
   const supabase = createClient();
   const studentId = await getStudentId(supabase);
   const { data, error } = await supabase
-    .from("assessment_results")
+    .from("grades")
     .select(
-      "course_assessments!inner(semester_id, semesters!inner(id, name, academic_year_id, academic_years!inner(id, name)))",
+      "semester_id, semesters!inner(id, name, academic_year_id, academic_years!inner(id, name))",
     )
-    .eq("student_id", studentId);
+    .eq("student_id", studentId)
+    .not("score", "is", null);
   if (error) throw new Error(error.message);
   const years = new Map<string, string>();
   const semesters = new Map<string, { name: string; academicYearId: string }>();
-  for (const row of (data ?? []) as any[]) {
-    const assessment = Array.isArray(row.course_assessments)
-      ? row.course_assessments[0]
-      : row.course_assessments;
-    const semester = Array.isArray(assessment?.semesters)
-      ? assessment.semesters[0]
-      : assessment?.semesters;
-    if (semester) {
-      years.set(semester.academic_years.id, semester.academic_years.name);
+  for (const row of (data ?? []) as unknown as StudentSemesterQueryRow[]) {
+    const semester = firstRelation(row.semesters);
+    const academicYear = firstRelation(semester?.academic_years);
+    if (semester && academicYear) {
+      years.set(academicYear.id, academicYear.name);
       semesters.set(semester.id, {
         name: semester.name,
         academicYearId: semester.academic_year_id,
@@ -175,6 +336,29 @@ export async function fetchStudentPayments() {
   }));
 }
 
+export async function fetchPaymentOptions(): Promise<PaymentOption[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("payment_options")
+    .select(
+      "id, name, payment_method, account_name, account_number, phone_number, instructions, icon_url",
+    )
+    .eq("is_active", true)
+    .order("display_order", { ascending: true });
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((option) => ({
+    id: option.id,
+    name: option.name,
+    paymentMethod: option.payment_method,
+    accountName: option.account_name,
+    accountNumber: option.account_number,
+    phoneNumber: option.phone_number,
+    instructions: option.instructions,
+    iconUrl: option.icon_url,
+  }));
+}
+
 export async function submitStudentPayment(input: {
   amount: number;
   paymentMonth: string;
@@ -189,16 +373,29 @@ export async function submitStudentPayment(input: {
     .from("payment-proofs")
     .upload(path, input.proof, { upsert: false });
   if (uploadError) throw new Error(uploadError.message);
-  const { error } = await supabase
+  const { data: payment, error: paymentError } = await supabase
     .from("payments")
     .insert({
       student_id: studentId,
       amount: input.amount,
-      payment_month: `${input.paymentMonth}-01`,
       payment_method: input.paymentMethod,
       note: input.note ?? null,
       proof_path: path,
       status: "pending",
+    })
+    .select("id")
+    .single();
+  if (paymentError || !payment) {
+    throw new Error(
+      paymentError?.message ?? "Could not create payment record.",
+    );
+  }
+
+  const { error: allocationError } = await supabase
+    .from("payment_month_allocations")
+    .insert({
+      payment_id: payment.id,
+      payment_month: `${input.paymentMonth}-01`,
     });
-  if (error) throw new Error(error.message);
+  if (allocationError) throw new Error(allocationError.message);
 }

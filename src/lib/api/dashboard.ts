@@ -14,13 +14,22 @@ type ProfileRow = Pick<
   "id" | "full_name" | "username" | "email" | "role"
 >;
 
-type TeacherRecord = { id: string; profile_id: string; profiles: ProfileRow[] };
+type TeacherRecord = {
+  id: string;
+  profile_id: string;
+  profiles: ProfileRow[] | ProfileRow | null;
+};
 
 type ClassRecord = {
   id: string;
   name: string;
   section: string | null;
-  grade_levels: { level_number: number }[];
+  academic_year_id: string;
+  grade_levels: { level_number: number } | { level_number: number }[] | null;
+  homeroom_teacher:
+    | { profiles: { full_name: string }[] | { full_name: string } | null }
+    | { profiles: { full_name: string }[] | { full_name: string } | null }[]
+    | null;
 };
 
 type SubjectRecord = { id: string; name: string };
@@ -30,12 +39,23 @@ type ClassSubjectRecord = {
   class_id: string;
   subject_id: string;
   teacher_id: string | null;
+  semester_id: string;
 };
 
-type GradeRecord = {
-  score: number;
+// Replaces GradeRecord. course_assessments carries class_subject_id/semester_id/
+// max_score/weight; assessment_results carries the actual student score.
+type CourseAssessmentRecord = {
+  id: string;
+  class_subject_id: string;
+  semester_id: string;
+  max_score: number;
+  weight: number;
+};
+
+type AssessmentResultRecord = {
   student_id: string;
-  course_assessments: { class_subject_id: string }[];
+  course_assessment_id: string;
+  score: number | null;
 };
 
 type PaymentRecord = {
@@ -47,16 +67,13 @@ type PaymentRecord = {
   submitted_at: string | null;
   note: string | null;
   payment_month_allocations: { payment_month: string }[];
-  students: { profiles: Pick<ProfileRow, "full_name">[] }[];
+  students: {
+    profiles: Pick<ProfileRow, "full_name">[] | Pick<ProfileRow, "full_name">;
+  }[];
 };
 
-type AcademicYearRecord = {
-  id: string;
-  name: string;
-  is_current: boolean;
-};
-
-type SemesterRecord = { academic_year_id: string; name: string };
+type AcademicYearRecord = { id: string; name: string; is_current: boolean };
+type SemesterRecord = { id: string; academic_year_id: string; name: string };
 
 function resolveStudentDisplayName(
   profile?: Partial<ProfileRow> | null,
@@ -74,9 +91,13 @@ function resolveStudentDisplayName(
   return fallback;
 }
 
+function firstRelation<T>(value: T | T[] | null | undefined): T | undefined {
+  return Array.isArray(value) ? value[0] : (value ?? undefined);
+}
+
 async function query<T>(
   request: PromiseLike<{ data: T | null; error: { message: string } | null }>,
-) {
+): Promise<T> {
   const { data, error } = await request;
   if (error) throw new Error(error.message);
   return data ?? ([] as T);
@@ -84,7 +105,19 @@ async function query<T>(
 
 export async function fetchDashboard(): Promise<DashboardData> {
   const supabase = createClient();
-  const dashboardStudents = await fetchStudents({ pageSize: 200 });
+
+  const years = await query<AcademicYearRecord[]>(
+    supabase
+      .from("academic_years")
+      .select("id, name, is_current")
+      .order("is_current", { ascending: false }),
+  );
+  const currentYear = years.find((year) => year.is_current) ?? years[0];
+
+  const dashboardStudents = await fetchStudents({
+    pageSize: 200,
+    academicYearId: currentYear?.id,
+  });
   const students = dashboardStudents.students;
 
   const [
@@ -92,8 +125,8 @@ export async function fetchDashboard(): Promise<DashboardData> {
     classes,
     subjects,
     classSubjects,
-    grades,
-    years,
+    courseAssessments,
+    assessmentResults,
     semesters,
     payments,
   ] = await Promise.all([
@@ -108,8 +141,9 @@ export async function fetchDashboard(): Promise<DashboardData> {
       supabase
         .from("classes")
         .select(
-          "id, name, section, grade_levels!classes_grade_level_id_fkey(level_number)",
+          "id, name, section, academic_year_id, grade_levels!classes_grade_level_id_fkey(level_number), homeroom_teacher:teachers!classes_homeroom_teacher_id_fkey(profiles!teachers_profile_id_fkey(full_name))",
         )
+        .eq("academic_year_id", currentYear?.id ?? "")
         .order("level_number", { foreignTable: "grade_levels" }),
     ),
     query<SubjectRecord[]>(
@@ -118,22 +152,24 @@ export async function fetchDashboard(): Promise<DashboardData> {
     query<ClassSubjectRecord[]>(
       supabase
         .from("class_subjects")
-        .select("id, class_id, subject_id, teacher_id"),
+        .select("id, class_id, subject_id, teacher_id, semester_id"),
     ),
-    query<GradeRecord[]>(
+    query<CourseAssessmentRecord[]>(
+      supabase
+        .from("course_assessments")
+        .select("id, class_subject_id, semester_id, max_score, weight"),
+    ),
+    query<AssessmentResultRecord[]>(
       supabase
         .from("assessment_results")
-        .select("score, student_id, course_assessments!inner(class_subject_id)")
-        .in("status", ["approved", "locked"]),
-    ),
-    query<AcademicYearRecord[]>(
-      supabase
-        .from("academic_years")
-        .select("id, name, is_current")
-        .order("is_current", { ascending: false }),
+        .select("student_id, course_assessment_id, score")
+        .not("score", "is", null),
     ),
     query<SemesterRecord[]>(
-      supabase.from("semesters").select("academic_year_id, name").order("name"),
+      supabase
+        .from("semesters")
+        .select("id, academic_year_id, name")
+        .order("name"),
     ),
     query<PaymentRecord[]>(
       supabase
@@ -148,44 +184,91 @@ export async function fetchDashboard(): Promise<DashboardData> {
   const classesById = new Map(classes.map((row) => [row.id, row]));
   const teachersById = new Map(teachers.map((row) => [row.id, row.profile_id]));
   const profilesById = new Map(
-    [
-      ...teachers.map(
-        (row) => [row.profile_id, row.profiles?.[0] ?? null] as const,
-      ),
-    ].filter(([, profile]) => profile !== null),
+    teachers
+      .map(
+        (row) => [row.profile_id, firstRelation(row.profiles) ?? null] as const,
+      )
+      .filter((entry): entry is [string, ProfileRow] => entry[1] !== null),
+  );
+  const classSubjectsById = new Map(classSubjects.map((cs) => [cs.id, cs]));
+  const courseAssessmentsById = new Map(
+    courseAssessments.map((ca) => [ca.id, ca]),
   );
 
-  const scoresBySubject = new Map<string, number[]>();
-  grades.forEach((grade) => {
-    const classSubject = classSubjects.find(
-      (row) => row.id === grade.course_assessments[0]?.class_subject_id,
+  let currentYearSemesterIds = new Set(
+    semesters
+      .filter((s) => s.academic_year_id === currentYear?.id)
+      .map((s) => s.id),
+  );
+  if (currentYearSemesterIds.size === 0) {
+    currentYearSemesterIds = new Set(semesters.map((s) => s.id));
+  }
+
+  // Weighted percentage per subject: sum(score/max_score * weight) / sum(weight) * 100.
+  // Accumulate weighted-sum and weight-total per subject in one pass, then divide.
+  const subjectWeightedSum = new Map<string, number>();
+  const subjectWeightTotal = new Map<string, number>();
+  let overallWeightedSum = 0;
+  let overallWeightTotal = 0;
+
+  for (const result of assessmentResults) {
+    if (result.score === null) continue;
+
+    const courseAssessment = courseAssessmentsById.get(
+      result.course_assessment_id,
     );
-    if (!classSubject) return;
-    const scores = scoresBySubject.get(classSubject.subject_id) ?? [];
-    scores.push(Number(grade.score));
-    scoresBySubject.set(classSubject.subject_id, scores);
-  });
+    if (!courseAssessment) continue;
+    if (!currentYearSemesterIds.has(courseAssessment.semester_id)) continue;
+    if (!courseAssessment.max_score) continue; // avoid divide-by-zero
+
+    const classSubject = classSubjectsById.get(
+      courseAssessment.class_subject_id,
+    );
+    if (!classSubject) continue;
+
+    const weight = Number(courseAssessment.weight) || 1;
+    const percentage =
+      (Number(result.score) / Number(courseAssessment.max_score)) * 100;
+    const weighted = percentage * weight;
+
+    overallWeightedSum += weighted;
+    overallWeightTotal += weight;
+
+    subjectWeightedSum.set(
+      classSubject.subject_id,
+      (subjectWeightedSum.get(classSubject.subject_id) ?? 0) + weighted,
+    );
+    subjectWeightTotal.set(
+      classSubject.subject_id,
+      (subjectWeightTotal.get(classSubject.subject_id) ?? 0) + weight,
+    );
+  }
+
+  const weightedAverage = (sum: number, weight: number) =>
+    weight > 0 ? sum / weight : 0;
 
   const mappedStudents: AllStudentRow[] = students.map((student) => ({
     ...student,
     temporaryPassword: student.temporaryPassword ?? null,
   }));
 
-  // NOTE: homeroom teacher isn't joined in the current `classes` select, so
-  // this stays "Unassigned" until that relation is added to the query.
   const mappedClasses: ClassRow[] = classes.map((classRow) => ({
     ...classRow,
-    grade: classRow.grade_levels?.[0]?.level_number ?? 0,
+    grade: firstRelation(classRow.grade_levels)?.level_number ?? 0,
     section: classRow.section ?? "",
     subjects: [],
     studentCount: students.filter((student) => student.classId === classRow.id)
       .length,
-    teacher: "Unassigned",
+    teacher:
+      firstRelation(firstRelation(classRow.homeroom_teacher)?.profiles)
+        ?.full_name ?? "Unassigned",
   }));
 
   const mappedSubjects: SubjectRow[] = subjects.map((subject) => {
     const assignment = classSubjects.find(
-      (row) => row.subject_id === subject.id,
+      (row) =>
+        row.subject_id === subject.id &&
+        currentYearSemesterIds.has(row.semester_id),
     );
     const classRow = assignment
       ? classesById.get(assignment.class_id)
@@ -196,8 +279,8 @@ export async function fetchDashboard(): Promise<DashboardData> {
     const teacher = teacherProfileId
       ? (profilesById.get(teacherProfileId)?.full_name ?? "Assigned teacher")
       : "Unassigned";
-    const scores = scoresBySubject.get(subject.id) ?? [];
-    const classGrade = classRow?.grade_levels?.[0]?.level_number;
+    const classGrade = firstRelation(classRow?.grade_levels)?.level_number;
+
     return {
       id: subject.id,
       name: subject.name,
@@ -206,31 +289,33 @@ export async function fetchDashboard(): Promise<DashboardData> {
         : "All classes",
       classId: classRow?.id ?? "",
       teacher,
-      avgScore: scores.length
-        ? scores.reduce((total, score) => total + score, 0) / scores.length
-        : 0,
+      avgScore: weightedAverage(
+        subjectWeightedSum.get(subject.id) ?? 0,
+        subjectWeightTotal.get(subject.id) ?? 0,
+      ),
     };
   });
 
-  const currentYear = years.find((year) => year.is_current) ?? years[0];
   const currentSemester = currentYear
-    ? semesters.find((semester) => semester.academic_year_id === currentYear.id)
+    ? semesters.find((s) => s.academic_year_id === currentYear.id)
     : undefined;
 
   const enrollment = new Map<number, number>();
-  mappedClasses.forEach((classRow) =>
-    enrollment.set(
-      classRow.grade,
-      (enrollment.get(classRow.grade) ?? 0) + classRow.studentCount,
-    ),
-  );
-
-  const scores = grades.map((grade) => Number(grade.score));
+  for (const classRow of mappedClasses) {
+    if (classRow.grade > 0) {
+      enrollment.set(
+        classRow.grade,
+        (enrollment.get(classRow.grade) ?? 0) + classRow.studentCount,
+      );
+    }
+  }
 
   const mappedPayments: PaymentRow[] = payments.map((payment) => {
     const studentRecord = students.find((row) => row.id === payment.student_id);
-    const className = studentRecord?.className ?? "Unassigned";
-    const studentProfile = payment.students?.[0]?.profiles?.[0];
+    const paymentStudent = firstRelation(payment.students);
+    const studentProfile = paymentStudent
+      ? firstRelation(paymentStudent.profiles)
+      : undefined;
     const paymentMonth = payment.payment_month_allocations?.[0]?.payment_month;
 
     return {
@@ -239,7 +324,7 @@ export async function fetchDashboard(): Promise<DashboardData> {
       studentName: resolveStudentDisplayName(studentProfile, "Unknown student"),
       studentNumber: studentRecord?.student_number ?? "",
       classId: studentRecord?.classId ?? "",
-      className,
+      className: studentRecord?.className ?? "Unassigned",
       amount: Number(payment.amount),
       paymentMonth: paymentMonth ?? "",
       status: payment.status,
@@ -262,15 +347,10 @@ export async function fetchDashboard(): Promise<DashboardData> {
       totalStudents: students.length,
       totalTeachers: teachers.length,
       totalClasses: classes.length,
-      avgScore: scores.length
-        ? scores.reduce((total, score) => total + score, 0) / scores.length
-        : 0,
+      avgScore: weightedAverage(overallWeightedSum, overallWeightTotal),
     },
     enrollmentByGrade: [...enrollment.entries()]
       .sort((a, b) => a[0] - b[0])
-      .map(([grade, count]) => ({
-        grade: `Grade ${grade}`,
-        count,
-      })),
+      .map(([grade, count]) => ({ grade: `Grade ${grade}`, count })),
   };
 }

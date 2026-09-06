@@ -1,6 +1,9 @@
+"use client";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   fetchStudentFilterOptions,
+  fetchPaymentOptions,
   fetchStudentPayments,
   fetchStudentResults,
   submitStudentPayment,
@@ -27,6 +30,13 @@ export function useStudentPayments() {
   return useQuery({
     queryKey: ["student-payments"],
     queryFn: fetchStudentPayments,
+  });
+}
+
+export function usePaymentOptions() {
+  return useQuery({
+    queryKey: ["payment-options"],
+    queryFn: fetchPaymentOptions,
   });
 }
 

@@ -197,27 +197,31 @@ export default function AdminDashboardPage() {
               </span>
             </CardHeader>
             <CardContent className="divide-y p-0">
-              {data.subjects.length === 0 ? (
+              {data.subjects.filter((subject) => subject.avgScore > 0)
+                .length === 0 ? (
                 <p className="p-4 text-sm text-muted-foreground">
                   No subject scores yet.
                 </p>
               ) : (
-                data.subjects.slice(0, 4).map((sub) => (
-                  <div
-                    key={sub.id}
-                    className="flex items-center justify-between px-4 py-3"
-                  >
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium">{sub.name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {sub.className}
+                data.subjects
+                  .filter((subject) => subject.avgScore > 0)
+                  .slice(0, 4)
+                  .map((sub) => (
+                    <div
+                      key={sub.id}
+                      className="flex items-center justify-between px-4 py-3"
+                    >
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">{sub.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {sub.className}
+                        </span>
+                      </div>
+                      <span className="text-sm font-semibold tabular-nums">
+                        {sub.avgScore.toFixed(1)}%
                       </span>
                     </div>
-                    <span className="text-sm font-semibold tabular-nums">
-                      {sub.avgScore.toFixed(1)}%
-                    </span>
-                  </div>
-                ))
+                  ))
               )}
             </CardContent>
           </Card>
