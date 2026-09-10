@@ -12,6 +12,8 @@ export function usePayments(params: PaymentListParams = {}) {
   return useQuery({
     queryKey: [...paymentsKey, params],
     queryFn: () => fetchPayments(params),
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -19,6 +21,8 @@ export function usePaymentStudents() {
   return useQuery({
     queryKey: [...paymentsKey, "students"],
     queryFn: fetchPaymentStudents,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 }
 

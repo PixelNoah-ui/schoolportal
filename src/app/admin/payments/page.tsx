@@ -127,11 +127,11 @@ export default function PaymentsPage() {
   const searchParam = searchParams.get("search") ?? "";
   const [searchInput, setSearchInput] = useState(searchParam);
   const debouncedSearch = useDebouncedValue(searchInput);
-  const selectedMonth = searchParams.get("month") ?? currentPaymentMonth;
+  const selectedMonth = searchParams.get("month") ?? "all";
   const classFilter = searchParams.get("class") ?? "all";
   const statusFilter = (searchParams.get("status") ??
     "all") as PaymentFilterStatus;
-  const tab = (searchParams.get("tab") ?? "pending") as Tab;
+  const tab = (searchParams.get("tab") ?? "all") as Tab;
   const page = Math.max(1, Number(searchParams.get("page") ?? "1"));
   const backendStatus = tab === "pending" ? "pending" : statusFilter;
   const paymentsQuery = usePayments({
@@ -142,10 +142,19 @@ export default function PaymentsPage() {
     page,
     pageSize: PAGE_SIZE,
   });
+  const statsPaymentsQuery = usePayments({
+    month: selectedMonth,
+    classId: classFilter,
+    status: "all",
+    search: debouncedSearch,
+    page: 1,
+    pageSize: 1000,
+  });
   const studentsQuery = usePaymentStudents();
   const classesQuery = useClassOptions();
   const updatePayment = useUpdatePaymentStatus();
   const payments = paymentsQuery.data?.payments ?? emptyPayments;
+  const statsPayments = statsPaymentsQuery.data?.payments ?? emptyPayments;
   const classes = classesQuery.data ?? emptyClasses;
   const [reviewPayment, setReviewPayment] = useState<PaymentRow | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -175,8 +184,11 @@ export default function PaymentsPage() {
       ),
     );
     months.add(currentPaymentMonth);
-    return Array.from(months).sort((a, b) => b.localeCompare(a));
+    return ["all", ...Array.from(months).sort((a, b) => b.localeCompare(a))];
   }, [payments]);
+
+  const statsMonth =
+    selectedMonth === "all" ? currentPaymentMonth : selectedMonth;
 
   const overdueStudents = useMemo(() => {
     return (studentsQuery.data ?? []).filter((student) => {
@@ -185,17 +197,18 @@ export default function PaymentsPage() {
           allocation.payment_month.slice(0, 7),
         ) ?? [payment.payment_month.slice(0, 7)];
         return (
-          months.includes(selectedMonth) &&
+          months.includes(statsMonth) &&
           ["approved", "pending"].includes(payment.status)
         );
       });
       return !covered;
     });
-  }, [selectedMonth, studentsQuery.data]);
+  }, [statsMonth, studentsQuery.data]);
 
   const stats = useMemo(() => {
-    const thisMonth = payments.filter(
+    const thisMonth = statsPayments.filter(
       (p) =>
+        selectedMonth === "all" ||
         p.paymentMonth === selectedMonth ||
         p.coveredMonths?.includes(selectedMonth),
     );
@@ -203,20 +216,23 @@ export default function PaymentsPage() {
       .filter((p) => p.status === "approved")
       .reduce((sum, p) => sum + p.amount, 0);
     const pendingCount = thisMonth.filter((p) => p.status === "pending").length;
-    const expectedTotal =
-      (thisMonth.length + overdueStudents.length) * monthlyTuitionFee || 1;
+    const expectedCount =
+      selectedMonth === "all"
+        ? thisMonth.length
+        : thisMonth.length + overdueStudents.length;
     const collectionRate = Math.round(
       (thisMonth.filter((p) => p.status === "approved").length /
-        (thisMonth.length + overdueStudents.length || 1)) *
+        (expectedCount || 1)) *
         100,
     );
-    return { collected, pendingCount, collectionRate, expectedTotal };
-  }, [payments, overdueStudents, selectedMonth]);
+    return { collected, pendingCount, collectionRate };
+  }, [statsPayments, overdueStudents, selectedMonth]);
 
   const filtered = payments;
 
   const isLoading =
     paymentsQuery.isLoading ||
+    statsPaymentsQuery.isLoading ||
     studentsQuery.isLoading ||
     classesQuery.isLoading;
   const totalPage = paymentsQuery.data?.totalPages ?? 1;
@@ -225,7 +241,7 @@ export default function PaymentsPage() {
     Boolean(searchParam) ||
     classFilter !== "all" ||
     statusFilter !== "all" ||
-    selectedMonth !== currentPaymentMonth;
+    selectedMonth !== "all";
 
   const clearFilters = () => {
     setSearchInput("");
@@ -238,10 +254,24 @@ export default function PaymentsPage() {
   };
 
   const handleApprove = (id: string) =>
-    updatePayment.mutate({ id, status: "approved" });
+    updatePayment.mutateAsync({ id, status: "approved" }).then(() => {
+      const next = new URLSearchParams(searchParams);
+      next.set("tab", "all");
+      next.delete("status");
+      next.delete("page");
+      router.replace(`?${next.toString()}`);
+    });
 
   const handleReject = (id: string, reason: string) =>
-    updatePayment.mutate({ id, status: "rejected", rejectionReason: reason });
+    updatePayment
+      .mutateAsync({ id, status: "rejected", rejectionReason: reason })
+      .then(() => {
+        const next = new URLSearchParams(searchParams);
+        next.set("tab", "all");
+        next.delete("status");
+        next.delete("page");
+        router.replace(`?${next.toString()}`);
+      });
 
   return (
     <>
@@ -251,11 +281,13 @@ export default function PaymentsPage() {
           <PageHeader
             eyebrow="Monthly Payment Review"
             count={
-              payments.filter(
-                (p) =>
-                  p.paymentMonth === selectedMonth ||
-                  p.coveredMonths?.includes(selectedMonth),
-              ).length
+              selectedMonth === "all"
+                ? payments.length
+                : payments.filter(
+                    (p) =>
+                      p.paymentMonth === selectedMonth ||
+                      p.coveredMonths?.includes(selectedMonth),
+                  ).length
             }
           />
           <div className="flex items-center gap-2">
@@ -276,7 +308,7 @@ export default function PaymentsPage() {
               <SelectContent>
                 {monthOptions.map((month) => (
                   <SelectItem key={month} value={month}>
-                    {formatMonth(month)}
+                    {month === "all" ? "All months" : formatMonth(month)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -558,6 +590,7 @@ export default function PaymentsPage() {
         onOpenChange={setDialogOpen}
         onApprove={handleApprove}
         onReject={handleReject}
+        isSubmitting={updatePayment.isPending}
       />
     </>
   );

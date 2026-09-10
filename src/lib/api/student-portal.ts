@@ -323,17 +323,24 @@ export async function fetchStudentPayments() {
   const { data, error } = await supabase
     .from("payments")
     .select(
-      "id, amount, payment_month, status, payment_method, submitted_at, rejection_reason, note",
+      "id, amount, status, payment_method, submitted_at, rejection_reason, note, payment_month_allocations(payment_month)",
     )
     .eq("student_id", studentId)
-    .order("payment_month", { ascending: false });
+    .order("submitted_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return ((data ?? []) as StudentPayment[]).map((payment) => ({
-    ...payment,
-    amount: Number(payment.amount),
-    paymentMonth: payment.payment_month,
-    submittedAt: payment.submitted_at,
-  }));
+  return (data ?? []).map((payment) => {
+    const allocation = payment.payment_month_allocations?.[0];
+    return {
+      id: payment.id,
+      amount: Number(payment.amount),
+      paymentMonth: allocation?.payment_month?.slice(0, 7) ?? "",
+      status: payment.status,
+      paymentMethod: payment.payment_method,
+      submittedAt: payment.submitted_at,
+      rejectionReason: payment.rejection_reason,
+      note: payment.note,
+    } satisfies StudentPayment;
+  });
 }
 
 export async function fetchPaymentOptions(): Promise<PaymentOption[]> {

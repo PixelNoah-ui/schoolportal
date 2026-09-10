@@ -28,12 +28,13 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/utils/supabase/client";
 import { teacherNavMain, teacherNavFooter } from "./nav-config";
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const [email, setEmail] = useState("Loading...");
+  const [email, setEmail] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState("Account");
 
   useEffect(() => {
@@ -52,10 +53,7 @@ export function AppSidebar() {
     });
   }, []);
 
-  const initials =
-    email === "Loading..." || email === "No email"
-      ? "--"
-      : email.slice(0, 2).toUpperCase();
+  const initials = email ? email.slice(0, 2).toUpperCase() : "--";
 
   const handleLogOut = async () => {
     const supabase = createClient();
@@ -143,7 +141,7 @@ export function AppSidebar() {
                   <div className="flex flex-col leading-none text-left">
                     <span className="text-sm font-medium">{displayName}</span>
                     <span className="text-xs text-muted-foreground">
-                      {email}
+                      {email ?? <Skeleton className="h-3 w-28 rounded-none" />}
                     </span>
                   </div>
                   <ChevronsUpDown className="ml-auto size-4" />

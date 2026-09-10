@@ -20,8 +20,9 @@ interface PaymentReviewDialogProps {
   payment: PaymentRow | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onApprove: (id: string) => void;
-  onReject: (id: string, reason: string) => void;
+  onApprove: (id: string) => Promise<void>;
+  onReject: (id: string, reason: string) => Promise<void>;
+  isSubmitting?: boolean;
 }
 
 export function PaymentReviewDialog({
@@ -30,6 +31,7 @@ export function PaymentReviewDialog({
   onOpenChange,
   onApprove,
   onReject,
+  isSubmitting = false,
 }: PaymentReviewDialogProps) {
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
@@ -46,6 +48,7 @@ export function PaymentReviewDialog({
     <Dialog
       open={open}
       onOpenChange={(o) => {
+        if (!o && isSubmitting) return;
         if (!o) close();
         else onOpenChange(o);
       }}
@@ -164,6 +167,7 @@ export function PaymentReviewDialog({
                 <Button
                   variant="outline"
                   className="rounded-none"
+                  disabled={isSubmitting}
                   onClick={() => setRejecting(true)}
                 >
                   <XCircle className="size-4" />
@@ -171,13 +175,14 @@ export function PaymentReviewDialog({
                 </Button>
                 <Button
                   className="rounded-none"
-                  onClick={() => {
-                    onApprove(payment.id);
+                  disabled={isSubmitting}
+                  onClick={async () => {
+                    await onApprove(payment.id);
                     close();
                   }}
                 >
                   <CheckCircle2 className="size-4" />
-                  Approve payment
+                  {isSubmitting ? "Approving..." : "Approve payment"}
                 </Button>
               </>
             ) : (
@@ -185,6 +190,7 @@ export function PaymentReviewDialog({
                 <Button
                   variant="ghost"
                   className="rounded-none"
+                  disabled={isSubmitting}
                   onClick={() => setRejecting(false)}
                 >
                   Cancel
@@ -192,13 +198,13 @@ export function PaymentReviewDialog({
                 <Button
                   variant="destructive"
                   className="rounded-none"
-                  disabled={!reason.trim()}
-                  onClick={() => {
-                    onReject(payment.id, reason.trim());
+                  disabled={!reason.trim() || isSubmitting}
+                  onClick={async () => {
+                    await onReject(payment.id, reason.trim());
                     close();
                   }}
                 >
-                  Confirm rejection
+                  {isSubmitting ? "Rejecting..." : "Confirm rejection"}
                 </Button>
               </>
             )}

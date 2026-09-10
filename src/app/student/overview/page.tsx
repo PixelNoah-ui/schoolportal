@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { BookOpen, CreditCard } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { StudentSiteHeader } from "@/components/student/site-header";
 import { useStudentResults } from "@/hooks/use-student-portal";
 
@@ -37,9 +38,11 @@ export default function StudentOverview() {
                 <BookOpen className="size-6 text-primary" />
                 <p className="mt-5 text-lg font-semibold">My Results</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {results.isLoading
-                    ? "Loading results..."
-                    : `${results.data?.length ?? 0} subject results available`}
+                  {results.isLoading ? (
+                    <Skeleton className="h-4 w-40 rounded-none" />
+                  ) : (
+                    `${results.data?.length ?? 0} subject results available`
+                  )}
                 </p>
               </CardContent>
             </Card>

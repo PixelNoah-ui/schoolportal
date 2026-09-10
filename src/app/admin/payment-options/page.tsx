@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { CreditCard, Plus } from "lucide-react";
 import { SiteHeader } from "@/components/admin/site-header";
 import { PageHeader } from "@/components/admin/page-header";
@@ -11,6 +12,7 @@ import {
 import { RowActions } from "@/components/admin/row-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -66,6 +68,13 @@ const emptyValues = {
   display_order: "0",
   is_active: "true",
   instructions: "",
+};
+
+const localPaymentLogos: Record<string, string> = {
+  cbe: "/CBE.svg",
+  awash: "/AWASH.svg",
+  "awash bank": "/AWASH.svg",
+  telebirr: "/TELE.svg",
 };
 
 function optionValues(option: {
@@ -143,60 +152,72 @@ export default function PaymentOptionsPage() {
                       colSpan={5}
                       className="p-6 text-center text-sm text-muted-foreground"
                     >
-                      Loading payment options...
+                      <Skeleton className="mx-auto h-4 w-40 rounded-none" />
                     </TableCell>
                   </TableRow>
                 ) : data?.length ? (
-                  data.map((option) => (
-                    <TableRow key={option.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          {option.iconUrl ? (
-                            <span
-                              aria-hidden="true"
-                              className="size-9 border bg-contain bg-center bg-no-repeat p-1"
-                              style={{
-                                backgroundImage: `url(${option.iconUrl})`,
-                              }}
-                            />
-                          ) : (
-                            <CreditCard className="size-5 text-primary" />
-                          )}
-                          <div>
-                            <p className="font-medium">{option.name}</p>
-                            <p className="text-xs capitalize text-muted-foreground">
-                              {option.paymentMethod.replace("_", " ")}
-                            </p>
+                  data.map((option) => {
+                    const localLogo =
+                      localPaymentLogos[option.name.trim().toLowerCase()];
+                    return (
+                      <TableRow key={option.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            {localLogo ? (
+                              <Image
+                                src={localLogo}
+                                alt={`${option.name} logo`}
+                                width={36}
+                                height={36}
+                                className="size-9 border object-contain p-1"
+                              />
+                            ) : option.iconUrl ? (
+                              <span
+                                aria-hidden="true"
+                                className="size-9 border bg-contain bg-center bg-no-repeat p-1"
+                                style={{
+                                  backgroundImage: `url(${option.iconUrl})`,
+                                }}
+                              />
+                            ) : (
+                              <CreditCard className="size-5 text-primary" />
+                            )}
+                            <div>
+                              <p className="font-medium">{option.name}</p>
+                              <p className="text-xs capitalize text-muted-foreground">
+                                {option.paymentMethod.replace("_", " ")}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {option.accountName || option.accountNumber || "-"}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {option.phoneNumber || option.accountNumber || "-"}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {option.isActive ? "Visible" : "Hidden"}
-                      </TableCell>
-                      <TableCell>
-                        <RowActions
-                          entityName={option.name}
-                          fields={paymentOptionFields}
-                          values={optionValues(option)}
-                          onEdit={(values) =>
-                            updateOption.mutateAsync({
-                              id: option.id,
-                              payload: values,
-                            })
-                          }
-                          onDelete={() => deleteOption.mutateAsync(option.id)}
-                          editIsLoading={updateOption.isPending}
-                          deleteIsLoading={deleteOption.isPending}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {option.accountName || option.accountNumber || "-"}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {option.phoneNumber || option.accountNumber || "-"}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {option.isActive ? "Visible" : "Hidden"}
+                        </TableCell>
+                        <TableCell>
+                          <RowActions
+                            entityName={option.name}
+                            fields={paymentOptionFields}
+                            values={optionValues(option)}
+                            onEdit={(values) =>
+                              updateOption.mutateAsync({
+                                id: option.id,
+                                payload: values,
+                              })
+                            }
+                            onDelete={() => deleteOption.mutateAsync(option.id)}
+                            editIsLoading={updateOption.isPending}
+                            deleteIsLoading={deleteOption.isPending}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 ) : (
                   <TableRow>
                     <TableCell

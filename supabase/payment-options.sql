@@ -41,9 +41,9 @@ create policy payment_options_admin
 insert into public.payment_options
   (name, payment_method, account_name, account_number, phone_number, instructions, icon_url, display_order)
 values
-  ('CBE', 'bank_transfer', 'PIXELNOAH', '1000674781311', null, 'Use the student name as the payment reference.', 'https://api.dicebear.com/9.x/initials/svg?seed=CBE&backgroundColor=0b4ea2&fontFamily=Arial', 1),
-  ('Telebirr', 'mobile_money', 'PIXELNOAH', null, '0911355226', 'Include the student name in the payment note.', 'https://api.dicebear.com/9.x/initials/svg?seed=Telebirr&backgroundColor=168a45&fontFamily=Arial', 2),
-  ('Awash Bank', 'bank_transfer', 'PIXELNOAH', '418735347625342354', null, 'Use the student name as the payment reference.', 'https://api.dicebear.com/9.x/initials/svg?seed=Awash&backgroundColor=d71920&fontFamily=Arial', 3)
+  ('CBE', 'bank_transfer', 'PIXELNOAH', '1000674781311', null, 'Use the student name as the payment reference.', '/CBE.svg', 1),
+  ('Telebirr', 'mobile_money', 'PIXELNOAH', null, '0911355226', 'Include the student name in the payment note.', '/TELE.svg', 2),
+  ('Awash Bank', 'bank_transfer', 'PIXELNOAH', '418735347625342354', null, 'Use the student name as the payment reference.', '/AWASH.svg', 3)
 on conflict (name) do update set
   payment_method = excluded.payment_method,
   account_name = excluded.account_name,

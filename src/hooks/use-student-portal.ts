@@ -30,6 +30,8 @@ export function useStudentPayments() {
   return useQuery({
     queryKey: ["student-payments"],
     queryFn: fetchStudentPayments,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 }
 

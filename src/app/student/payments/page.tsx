@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Image from "next/image";
+import { useSearchParams } from "next/navigation";
 import { Banknote, Building2, CircleHelp, Smartphone } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { StudentSiteHeader } from "@/components/student/site-header";
+import { useToastManager } from "@/components/ui/toast";
 import {
   usePaymentOptions,
   useSubmitStudentPayment,
@@ -21,22 +24,35 @@ const methodIcons = {
   other: CircleHelp,
 } as const;
 
+const localPaymentLogos: Record<string, string> = {
+  cbe: "/CBE.svg",
+  "awash bank": "/AWASH.svg",
+  awash: "/AWASH.svg",
+  telebirr: "/TELE.svg",
+};
+
 export default function StudentPaymentsPage() {
+  const searchParams = useSearchParams();
   const options = usePaymentOptions();
   const submit = useSubmitStudentPayment();
+  const toastManager = useToastManager();
   const [selectedOption, setSelectedOption] = useState("");
-  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [month, setMonth] = useState(
+    () => searchParams.get("month") ?? new Date().toISOString().slice(0, 7),
+  );
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [proof, setProof] = useState<File | null>(null);
-  const [message, setMessage] = useState("");
 
   const submitPayment = async (event: FormEvent) => {
     event.preventDefault();
-    setMessage("");
     const option = options.data?.find((item) => item.id === selectedOption);
     if (!option || !proof || !amount || !month) {
-      setMessage("Choose a payment option and attach your receipt.");
+      toastManager.add({
+        title: "Payment details are incomplete",
+        description: "Choose a payment option and attach your receipt.",
+        type: "warning",
+      });
       return;
     }
 
@@ -51,11 +67,18 @@ export default function StudentPaymentsPage() {
       setAmount("");
       setNote("");
       setProof(null);
-      setMessage("Payment submitted for review.");
+      toastManager.add({
+        title: "Payment submitted",
+        description: "Your payment receipt was sent for review.",
+        type: "success",
+      });
     } catch (error) {
-      setMessage(
-        error instanceof Error ? error.message : "Could not submit payment.",
-      );
+      toastManager.add({
+        title: "Could not submit payment",
+        description:
+          error instanceof Error ? error.message : "Please try again.",
+        type: "error",
+      });
     }
   };
 
@@ -116,6 +139,8 @@ export default function StudentPaymentsPage() {
                     methodIcons[
                       option.paymentMethod as keyof typeof methodIcons
                     ] ?? CircleHelp;
+                  const localLogo =
+                    localPaymentLogos[option.name.trim().toLowerCase()];
                   return (
                     <Card
                       key={option.id}
@@ -124,7 +149,15 @@ export default function StudentPaymentsPage() {
                       <CardHeader className="border-b">
                         <div className="flex items-start gap-3">
                           <div className="flex size-10 items-center justify-center bg-primary/10 text-primary">
-                            {option.iconUrl ? (
+                            {localLogo ? (
+                              <Image
+                                src={localLogo}
+                                alt={`${option.name} logo`}
+                                width={32}
+                                height={32}
+                                className="size-8 object-contain"
+                              />
+                            ) : option.iconUrl ? (
                               <span
                                 aria-hidden="true"
                                 className="size-8 bg-contain bg-center bg-no-repeat"
@@ -257,9 +290,6 @@ export default function StudentPaymentsPage() {
                         className="rounded-none"
                       />
                     </div>
-                    {message && (
-                      <p className="text-sm text-muted-foreground">{message}</p>
-                    )}
                     <Button
                       type="submit"
                       disabled={submit.isPending}
