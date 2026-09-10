@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm, type SubmitHandler } from "react-hook-form";
-import { AlertCircle, Eye, EyeOff, Loader2 } from "lucide-react";
+import { AlertCircle, Check, Copy, Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +12,16 @@ import { BrandPanel, MobileBrandMark } from "@/components/BrandPortal";
 import { useLogin } from "@/hooks/use-auth";
 
 type LoginForm = { email: string; password: string };
+
+const demoAccounts = [
+  { role: "Student", email: "pixel@gmail.com", password: "1829f753f8A1!" },
+  {
+    role: "Teacher",
+    email: "pixelnah8@gmail.com",
+    password: "edf0311e2aA1!",
+  },
+  { role: "Admin", email: "pixelnoah8@gmail.com", password: "12345678" },
+] as const;
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,6 +32,7 @@ export default function LoginPage() {
     },
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [copiedValue, setCopiedValue] = useState<string | null>(null);
   const {
     register,
     handleSubmit,
@@ -30,6 +41,12 @@ export default function LoginPage() {
 
   const onSubmit: SubmitHandler<LoginForm> = (values) => {
     void login.mutate(values);
+  };
+
+  const copyValue = async (value: string) => {
+    await navigator.clipboard.writeText(value);
+    setCopiedValue(value);
+    window.setTimeout(() => setCopiedValue(null), 1500);
   };
 
   return (
@@ -115,6 +132,57 @@ export default function LoginPage() {
               )}
             </Button>
           </form>
+          <section className="mt-8 border-t pt-6">
+            <div className="mb-4">
+              <h2 className="text-sm font-semibold">Demo accounts</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Ready-to-use accounts for testing.
+              </p>
+            </div>
+            <div className="divide-y border-y">
+              {demoAccounts.map((account) => (
+                <div
+                  key={account.role}
+                  className="grid gap-3 py-3 sm:grid-cols-[5rem_1fr] sm:items-center"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-wide text-primary">
+                    {account.role}
+                  </p>
+                  <div className="grid gap-2 text-xs sm:grid-cols-2">
+                    {[
+                      ["Email", account.email],
+                      ["Password", account.password],
+                    ].map(([label, value]) => (
+                      <div
+                        key={label}
+                        className="flex min-w-0 items-center gap-2"
+                      >
+                        <span className="w-14 shrink-0 text-muted-foreground">
+                          {label}
+                        </span>
+                        <code className="min-w-0 flex-1 truncate text-foreground">
+                          {value}
+                        </code>
+                        <button
+                          type="button"
+                          aria-label={`Copy ${account.role} ${label.toLowerCase()}`}
+                          title={`Copy ${label.toLowerCase()}`}
+                          className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+                          onClick={() => void copyValue(value)}
+                        >
+                          {copiedValue === value ? (
+                            <Check className="size-4 text-emerald-600" />
+                          ) : (
+                            <Copy className="size-4" />
+                          )}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
           <p className="mt-8 text-xs text-muted-foreground">
             Trouble signing in? Contact{" "}
             <a
