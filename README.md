@@ -34,7 +34,7 @@ It covers the full academic cycle: academic years and semesters, class and subje
 
 ## 🖼️ Screenshots
 
-The deployed portal is available at [schoolportal.vercel.app](https://schoolportal.vercel.app).
+The deployed portal is available at [schoolportal.vercel.app](https://schoolportals.vercel.app).
 
 | Login                                                         | Admin dashboard                                                    |
 | ------------------------------------------------------------- | ------------------------------------------------------------------ |
@@ -81,7 +81,7 @@ The deployed portal is available at [schoolportal.vercel.app](https://schoolport
 | Backend               | Supabase — Postgres, Auth, Storage                                  |
 | Charts                | Recharts                                                            |
 | Forms                 | react-hook-form                                                     |
-| Deploy                | Vercel — [schoolportal.vercel.app](https://schoolportal.vercel.app) |
+| Deploy                | Vercel — [schoolportal.vercel.app](https://schoolportals.vercel.app) |
 
 ---
 
